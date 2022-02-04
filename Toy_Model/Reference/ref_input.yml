@@ -1,0 +1,14 @@
+# Input parameters for Langevin sampling psi constraint variable with analytic Heff
+
+model:
+  beta:      0.125 # B_eff = 2 
+  mu:        1.0 
+  gamma:     0.0
+
+timestepping:
+  dt:          0.0005
+  ntmax:       1500000
+  io_interval: 2500
+  noise:       true
+  plots: false
+  seed:  0

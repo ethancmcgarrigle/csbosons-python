@@ -1,0 +1,14 @@
+
+model:
+  beta:      0.125
+  mu:        1.0 
+  h:         0.02
+  gamma:     __gamma__
+
+timestepping:
+  dt:          0.00025
+  ntmax:       5000000
+  io_interval: 5000
+  noise:       true
+  seed:  0
+  isPlotting:  false

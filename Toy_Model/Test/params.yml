@@ -1,0 +1,15 @@
+
+model:
+  beta:      0.125
+  mu:        1.0 
+  h:         0.02
+  gamma:     0.0 
+
+timestepping:
+  dt:          0.0005
+  ntmax:       10000000
+  io_interval: 5000
+  noise:       true
+  seed:  0
+  isPlotting:  false
+  lambda_psi:  __lambda_psi__ 

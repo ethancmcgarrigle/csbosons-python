@@ -1,0 +1,42 @@
+-bash: error importing function definition for `BASH_FUNC_module()'
+No supported Python (2.4 / 2.6 / 2.7) version available.
+  File "<string>", line 1
+    import sys; print sys.version[:3]
+                      ^
+SyntaxError: invalid syntax
+
+
+----- SU(3) Simulation, 1-link effective model (no x dependence) ----
+
+
+dt : 0.0005
+
+beta_1 : (2.0543656365691807+0j)
+
+beta_2 : (2.007357588823429+0j)
+
+h: 0.02
+
+mu: 1.0
+
+Running for 1000000 timesteps
+
+
+Printing every 1000 timesteps
+
+Random Number Seed 0
+
+Is plotting? False
+
+
+Complex Langevin Sampling
+
+
+  Gradient descent inputs : 
+ stepsize:  0.1
+ maximum iteratons in descent:  500
+ error tolerance :  0.01
+ printing the gradient descent number of iterations? :   False
+
+Elapsed Time : 692.1353538036346 seconds 
+

@@ -3,7 +3,8 @@ from numpy import linalg
 import yaml
 import math
 import matplotlib
-matplotlib.rcParams['text.usetex'] = True
+#matplotlib.rcParams['text.usetex'] = True
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 import time
 from scipy.fft import fft 
@@ -12,9 +13,12 @@ import matplotlib
 import matplotlib.pyplot as plt 
 import sys
 import copy
-
+import io_functions
+import gradient_descent_Axb as grad_solver
 
 # Helper functions
+
+
 
 def psi_saddle(_h, n):
 	real_part = 2*np.pi*n # n is the saddle point mode index, since the real part is periodic; n is an integer 
@@ -54,47 +58,6 @@ def fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphis
     dSdphistar_dwn[itau] += U * (1./ntau) * phi_dwn[itaum1] * phi_dwn[itaum1] * phistar_dwn[itau]
     dSdphi_dwn[itaum1] += phistar_dwn[itaum1] - phistar_dwn[itau] + 1j * phistar_dwn[itau] * _psi/ ntau + phistar_dwn[itau] * _gamma/ntau 
     dSdphi_dwn[itaum1] += U * (1./ntau) * phistar_dwn[itau] * phi_dwn[itaum1] * phistar_dwn[itau]
-
-
-
-
-def step_ETD(Phi, Lincoefs, nonlincoefs, noisescls, nonlin_forces, w_vector, noises, L_vector, ntau):
-  # FFT phi's
-  # linear term
-  phi_up_cp, phistar_up_cp, phi_dwn_cp, phistar_dwn_cp = np.split(Phi, 4)
-  noise_up, noisestar_up, noise_dwn, noisestar_dwn = np.split(noises, 4)
-  lincoef_up, lincoef_dwn = np.split(Lincoefs, 2)
-  nonlincoef_up, nonlincoef_dwn = np.split(nonlincoefs, 2)
-  noisescl_up, noisescl_dwn = np.split(noisescls, 2)
-  L_up, L_dwn, Lstar_up, Lstar_dwn = np.split(L_vector, 4)
-  w_up, w_dwn, w_up_star, w_dwn_star= np.split(w_vector, 4)
-
-
-  phi_up_cp = fft(phi_up_cp) * lincoef_up
-  phi_dwn_cp = fft(phi_dwn_cp) * lincoef_dwn
-  phistar_up_cp = fft(phistar_up_cp) * np.conj(lincoef_up 
-  phistar_dwn_cp = fft(phistar_dwn_cp) * np.conj(lincoef_dwn)
-
-  # add nonlinear term 
-  phi_up_cp += (fft(L_up * w_up) * nonlincoef_up)
-  phi_dwn_cp += (fft(L_dwn * w_dwn) * nonlincoef_dwn)
-  phistar_up_cp += (fft(Lstar_up * w_up_star) * np.conj(nonlincoef_up))
-  phistar_dwn_cp += (fft(Lstar_dwn * w_dwn_star) * np.conj(nonlincoef_dwn))
-
-  
-  
-  # FFT and Scale by fourier coeff 
-  noise_up = fft(noise_up) * noisescl_up 
-  noise_dwn = fft(noise_dwn) * noisescl_dwn
-  noisestar_up = fft(noisestar_up) * np.conj(noisescl_up) 
-  noisestar_dwn = fft(noisestar_dwn) * np.conj(noisescl_dwn) 
-
-  phi_up_cp += noise_up
-  phi_dwn_cp += noise_dwn
-  phistar_up_cp += noisestar_up
-  phistar_dwn_cp += noisestar_dwn
-  
-
 
 
 
@@ -141,27 +104,40 @@ def constraint(y, ntau):
   return _result
 
 
-
-# Parameters
-gamma_shift = 3.25
-
-seed = 0 
+# Load the inputs
+inputfile = str(sys.argv[1]) 
+parameters = io_functions.open_params(inputfile) 
+beta, ntau, _hz, dt, numtsteps, iofreq, seed, isPlotting = parameters
 np.random.seed(seed)
-ntau = 12
-# IC = np.ones(ntau, dtype=np.complex_) * (1/(np.sqrt(2)) + 1j*2/(np.sqrt(3))) 
-IC = np.ones(ntau, dtype=np.complex_) * (1./(np.sqrt(2.)) + 1j*0.) 
-numspecies = 2 
-beta = 1.00
-# lambda_psi = 0.025
-_hz = 0.0
-_U = 0.25
 
-dt = 0.0005
+# inputs for gradient descent
+with open('params.yml') as infile:
+  grad_descent_params = yaml.load(infile, Loader=yaml.FullLoader)
 
-numtsteps = 500000
-iofreq = 1000 # printing frequency 
+# Store parameters in local variables and echo to screen
+stepsize = grad_descent_params['simulation']['stepsize']
+max_iterations = grad_descent_params['simulation']['max_iters']
+ETOL = float(grad_descent_params['simulation']['ETOL'])
+print_flag = grad_descent_params['simulation']['print_iters']
+
+print()
+print('  Gradient descent inputs : ' )
+print(' stepsize:  ' + str(stepsize))
+print(' maximum iteratons in descent:  ' + str(max_iterations))
+print(' error tolerance :  ' + str(ETOL))
+print(' printing the gradient descent number of iterations? :  ', print_flag)
+print()
+
+
+# Set up the simulation 
 
 num_points = math.floor(numtsteps/iofreq)
+[t_s, N_tot_s, N_up_s, N_dwn_s, psi_s, Mag_s, M2_s] = io_functions.initialize_Observables(num_points)
+
+
+# Parameters
+IC = np.ones(ntau, dtype=np.complex_) * (1./(np.sqrt(2.)) + 1j*0.) 
+numspecies = 2 
 
 
 # initialize psi at saddle pt
@@ -173,20 +149,7 @@ if(isPsizero):
 else:
   _psi += psi_saddle(_hz, int(0)) # choose 0th mode 
 
-print()
-print()
-print('-----Single Spin simulation, Schwinger Bosonic Coherent States----')
-print()
-print()
-print()
-print('Applied Magnetic Field : ' + str(_hz))
-print()
-print('Temperature : ' + str(1/beta) + ' Kelvin')
-print()
-print('Running for ' + str(numtsteps) + ' timesteps')
-print()
-print('Using Ntau = ' + str(ntau) + ' tau slices' )
-print()
+
 if(isPsizero):
   print('Pinning psi to zero')
 else:
@@ -211,15 +174,6 @@ phistar_dwn += IC
 
 # option to do normally distributed random nums
  
- #phi_up = np.random.normal(0, 1.0, ntau)  + 1j*np.random.normal(0, 1.0, ntau) 
- #phi_dwn = np.random.normal(0, 1.0, ntau) + 1j*np.random.normal(0, 1.0, ntau)  
- #phistar_up = np.random.normal(0, 1.0, ntau) + 1j*np.random.normal(0, 1.0, ntau)  
- #phistar_dwn = np.random.normal(0, 1.0, ntau) + 1j*np.random.normal(0, 1.0, ntau) 
-
- #phi_up = np.ones(ntau, dtype=np.complex_) 
- #phistar_up = 2.*np.ones(ntau, dtype=np.complex_) 
- #phi_dwn = 3.* np.ones(ntau, dtype=np.complex_) 
- #phistar_dwn = 4.*np.ones(ntau, dtype=np.complex_) 
 L_up = np.zeros(ntau, dtype=np.complex_)
 L_dwn= np.zeros(ntau, dtype=np.complex_)
 Lstar_up = np.zeros(ntau, dtype=np.complex_)
@@ -248,21 +202,9 @@ dSdphi_dwn = np.zeros(ntau, dtype=np.complex_)
 
 
 # Sampling vectors   
-
-t_s = np.zeros(num_points + 1)
 num_iters_s = np.zeros(num_points + 1)
-N_tot_s = np.zeros(num_points + 1, dtype=np.complex_)
-N_up_s = np.zeros(num_points + 1, dtype=np.complex_)
-N_dwn_s = np.zeros(num_points + 1, dtype=np.complex_)
-Mag_s = np.zeros(num_points + 1, dtype=np.complex_)
-M2_s = np.zeros(num_points + 1, dtype=np.complex_)
-psi_s = np.zeros(num_points + 1, dtype=np.complex_)
-
 
 num_iters_s[0] = 0
-
-# initialize the fictitious time 
-t = 0.
 
 # Calculate the particle numbers
 N_up = 0.
@@ -351,14 +293,25 @@ y_tilde = np.zeros(len(y_iter), dtype=np.complex_)
 y_vector = np.zeros(len(y_iter), dtype=np.complex_) 
 y1 = np.zeros(len(y_iter), dtype=np.complex_)
 
-ETOL = 1E-5
-max_iterations = 250
+#ETOL = 1E-5
+#max_iterations = 250
 
 
 # Initialize y_vector with the CS fields 
 y_vector += np.hstack([phi_up, phistar_up, phi_dwn, phistar_dwn])
 
-start = time.time()
+
+observables = [N_tot_s, N_up_s, N_dwn_s, psi_s, Mag_s, M2_s] 
+io_functions.write_observables("data_projected_Newton.dat", observables, t, True)
+
+opout=open('psi_samples_proj.dat',"w")
+opout.write("# t_elapsed psi.real psi.imag avg_iters_per_dt \n")
+opout.write("{} {} {} {}\n".format(t, _psi.real, _psi.imag, num_iters_s[0]))
+opout.close() 
+
+
+
+
 
 # Timestep using ETD 
 for l in range(0, numtsteps + 1):
@@ -421,7 +374,6 @@ for l in range(0, numtsteps + 1):
 
     y1 -= (grad_e * psi_iter)
     # Take EM step 
-    # phi_vector -= mobility * dt * (dS_dphi(phi_vector, _beta1, _beta2))
     y1 -= y_EM # residuals 
 
     # Where is grad_e evaluated? either y_iter or y_1 or y_EM ?  
@@ -623,8 +575,19 @@ for l in range(0, numtsteps + 1):
     if(ctr %  25):
       print("Completed {} of {} steps".format(l, numtsteps))
     # opout.write("{} {} {} {} {}\n".format(it, Msum.real / Navg, Msum.imag / Navg, psi.real, psi.imag))
-    t_s[ctr] = t 
+    if(math.isnan(constraint_avg.real)):
+      print("Trajectory diverged -- nan, ending simulation")
+      break
+
+    observables = [N_tot_s, N_up_s, N_dwn_s, psi_s, Mag_s, M2_s] 
+    io_functions.write_observables("data_projected_Newton.dat", observables, t, False)
     num_iters_s[ctr] = num_iters_avg 
+
+    opout=open('psi_samples_proj.dat',"a")
+    opout.write("{} {} {} {}\n".format(t, _psi.real, _psi.imag, num_iters_avg))
+    opout.close() 
+
+    t_s[ctr] = t 
     Mag_s[ctr] = M_avg 
     N_tot_s[ctr] = N_tot_avg 
     N_up_s[ctr] = N_up_avg 
@@ -654,112 +617,27 @@ if(l != numtsteps):
   psi_s = psi_s[0:divergence_index]
 
 
+# Package observables in a list 
+observables = [N_tot_s, N_up_s, N_dwn_s, psi_s, Mag_s, M2_s] 
+if(not(suppressOutput)):
+  io_functions.print_sim_output(t, observables)
 
-end = time.time()
-print()
-print()
-print('Simulation finished: Runtime = ' + str(end - start) + ' seconds')
-
-# Print the results (noise long-time averages)
-print()
-print()
-print('The Particle Number is: ' + str(np.mean(N_tot_s.real)))
-print()
-print('The Up Boson Particle Number is: ' + str(np.mean(N_up_s.real)))
-print()
-print('The Down Boson Particle Number is: ' + str(np.mean(N_dwn_s.real)))
-print()
-print('The Magnetization is: ' + str(np.mean(Mag_s.real)))
-print()
-print('The Magnetization-squared is: ' + str(np.mean(M2_s.real)))
-
-
-# plot the results 
-
-plt.figure(1)
-plt.title('Particle Number: CL Simulation', fontsize = 20, fontweight = 'bold')
-plt.plot(t_s, N_tot_s.real, '-', color = 'green', label = 'Samples: real')
-plt.plot(t_s, N_tot_s.imag, '-', color = 'skyblue', label = 'Samples: imag')
-plt.plot(t_s, np.ones(len(t_s)), 'k', label = 'Constraint')
-plt.xlabel('CL time', fontsize = 20, fontweight = 'bold')
-plt.ylabel('$N_{tot}$', fontsize = 20, fontweight = 'bold') 
-plt.ylim([-5, 10])
-plt.legend()
-plt.show()
-
-
-plt.figure(2)
-plt.title('Psi sampling: CL Simulation', fontsize = 20, fontweight = 'bold')
-plt.plot(t_s, psi_s.real, '-r', label = 'Samples: real')
-plt.plot(t_s, psi_s.imag, '-g', label = 'Samples: imag')
-plt.xlabel('CL time', fontsize = 20, fontweight = 'bold')
-plt.ylabel('$\psi$', fontsize = 20, fontweight = 'bold') 
-plt.ylim([-5, 5])
-plt.legend()
-plt.show()
-
-plt.figure(3)
-plt.title('Psi Trajectory: CL Simulation', fontsize = 20, fontweight = 'bold')
-plt.plot(psi_s.real, psi_s.imag, '-r', label = 'Samples: real')
-plt.xlabel('Re($\psi$)', fontsize = 20, fontweight = 'bold')
-plt.ylabel('Im($\psi$)', fontsize = 20, fontweight = 'bold') 
-plt.legend()
-# plt.ylim([-2, 1])
-plt.show()
-
-
-plt.figure(4)
-plt.title('Particle Numbers (real part): CL Simulation', fontsize = 20, fontweight = 'bold')
-plt.plot(t_s, N_up_s.real, '-', color = 'green', label = 'Samples: Up')
-plt.plot(t_s, N_dwn_s.real, '-', color = 'red', label = 'Samples: Down')
-# plt.plot(t_s, np.ones(len(t_s)), 'k', label = 'Constraint')
-plt.xlabel('CL time', fontsize = 20, fontweight = 'bold')
-plt.ylabel('$N$', fontsize = 20, fontweight = 'bold') 
-plt.ylim([-5, 20])
-plt.legend()
-plt.show()
-
-plt.figure(5)
-plt.title('Particle Numbers (imag part): CL Simulation', fontsize = 20, fontweight = 'bold')
-plt.plot(t_s, N_up_s.imag, '-', color = 'green', label = 'Samples: Up')
-plt.plot(t_s, N_dwn_s.imag, '-', color = 'red', label = 'Samples: Down')
-# plt.plot(t_s, np.ones(len(t_s)), 'k', label = 'Constraint')
-plt.xlabel('CL time', fontsize = 20, fontweight = 'bold')
-plt.ylabel('Im($N$)', fontsize = 20, fontweight = 'bold') 
-plt.legend()
-plt.ylim([-5, 20])
-plt.show()
+# plots 
+if(isPlotting):
+  io_functions.plot_CL_traces(t_s, observables)
 
 
 
 
-plt.figure(6)
-plt.title('Magnetization: CL Simulation', fontsize = 20, fontweight = 'bold')
-plt.plot(t_s, Mag_s.real, '-', color = 'purple', label = 'Samples')
-plt.plot(t_s, Mag_s.imag, '-', color = 'skyblue', label = 'Samples')
-# plt.plot(t_s, np.ones(len(t_s)), 'k', label = 'Constraint')
-plt.xlabel('CL time', fontsize = 20, fontweight = 'bold')
-plt.ylabel('$M_{z}$', fontsize = 20, fontweight = 'bold') 
-plt.ylim([-5, 20])
-plt.legend()
-plt.show()
+if(isPlotting):
+  plt.figure(13)
+  plt.title('Iterations per timestep sampling: CL Simulation', fontsize = 20, fontweight = 'bold')
+  plt.plot(t_s, num_iters_s, '-r', label = 'Samples')
+  plt.xlabel('CL time', fontsize = 20, fontweight = 'bold')
+  plt.ylabel('Iterations', fontsize = 20, fontweight = 'bold') 
+  # plt.ylim([-5, 5])
+  plt.legend()
+  plt.show()
+  
 
-plt.figure(7)
-plt.title('$M^2$ : CL Simulation', fontsize = 20, fontweight = 'bold')
-plt.plot(t_s, M2_s.real, '-', color = 'purple', label = 'Samples')
-plt.plot(t_s, M2_s.imag, '-', color = 'skyblue', label = 'Samples')
-# plt.plot(t_s, np.ones(len(t_s)), 'k', label = 'Constraint')
-plt.xlabel('CL time', fontsize = 20, fontweight = 'bold')
-plt.ylabel('$M^2$', fontsize = 20, fontweight = 'bold') 
-plt.ylim([-5, 20])
-plt.legend()
-plt.show()
 
-plt.figure(13)
-plt.title('Iterations per timestep sampling: CL Simulation', fontsize = 20, fontweight = 'bold')
-plt.plot(t_s, num_iters_s, '-r', label = 'Samples')
-plt.xlabel('CL time', fontsize = 20, fontweight = 'bold')
-plt.ylabel('Iterations', fontsize = 20, fontweight = 'bold') 
-# plt.ylim([-5, 5])
-plt.legend()
-plt.show()

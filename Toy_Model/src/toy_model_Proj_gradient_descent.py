@@ -23,33 +23,6 @@ start = time.time()
 # Toy model
 suppressOutput = True
 
-
-
- #def grad_descent(A, b, x0, stepsize, max_iterations, ETOL):
- #  # Gradient descent method that uses initial guess x_0 in solving Ax = b linear problem:
- #  # Takes in the maximum number of iterations and the error tolerance as inputs  
- #  x_i = np.zeros(len(x0), dtype = np.complex_)
- #  # initial iteration, set x_i = x_0
- #  x_i += x0
- #
- #  for i in range(0, max_iterations + 1):
- #     # 1. Calculate the gradient (Ax - b) 
- #     gradient = A @ x_i - b
- #     # 2. Check for convergence via the 2-norm
- #     if(np.linalg.norm(gradient, 2) < ETOL):
- #       break     
- #
- #     x_i -= stepsize * gradient 
- #     # sol = x_i
- #
- # #  print('Number of iteratons for 1 gradient descent loop: ')
- # #  print(i + 1)
- # #  print()
- #  return x_i 
-
-
-
-
 def cotangent(x):
   _result = np.tan(x)
   _result = 1./_result # inverse of tangent is cotangent 

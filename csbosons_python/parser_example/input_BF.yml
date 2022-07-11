@@ -1,0 +1,16 @@
+
+model:
+  beta:      1.00
+  ntau:      24
+  Nx:        4
+  mu:        -1.0 
+  g:         0.00
+
+
+timestepping:
+  dt:          0.015
+  ntmax:       50000
+  io_interval: 250
+  noise:       true
+  seed:  0
+  isPlotting:  false

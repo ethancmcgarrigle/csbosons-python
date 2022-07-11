@@ -3,8 +3,9 @@ from numpy import linalg
 import yaml
 import math
 import matplotlib
-matplotlib.use('TkAgg')
+#matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
+matplotlib.rcParams['text.usetex'] = True
 import time
 from scipy.fft import fft 
 from scipy.fft import ifft
@@ -27,14 +28,15 @@ def open_params(filename):
   ntau = params['model']['ntau'] # phase of u
   _hz = params['model']['hz'] 
   _U = params['model']['U'] 
+  _gamma = params['model']['gamma'] 
   
-  dt = float(params['timestepping']['dt'])
-  numtsteps = params['timestepping']['ntmax']
-  iofreq = params['timestepping']['io_interval']
-  seed = params['timestepping']['seed']
-  isPlotting = params['timestepping']['isPlotting']
+  dt = float(params['simulation']['dt'])
+  numtsteps = params['simulation']['ntmax']
+  iofreq = params['simulation']['io_interval']
+  seed = params['simulation']['seed']
+  isPlotting = params['simulation']['isPlotting']
 
-  parameters = [_beta, ntau, _hz, dt, numtsteps, iofreq, seed, isPlotting]
+  parameters = [_beta, ntau, _hz, dt, numtsteps, iofreq, seed, isPlotting, _U, _gamma]
   print()
   print()
   print('----- Schwinger Bosonic Coherent States Simulation, 1 spin model  ----')
@@ -93,7 +95,7 @@ def write_observables(filename, observables, t, isFirstLine):
     opout=open(filename,"a")
 
   # Observables is a list of complex numbers, block averages from CL 
-  N_tot_s, N_up_s, N_dwn_s, psi_s, Mag_s, M2_s = observables
+  N_tot_s, N_up_s, N_dwn_s, Mag_s, M2_s = observables
   if(isFirstLine):
     opout.write("# t_elapsed N_tot.real N_tot.imag N_up.real N_up.imag N_dwn.real N_dwn.imag Mag.real Mag.imag M2.real M2.imag \n")
 
@@ -105,7 +107,9 @@ def write_observables(filename, observables, t, isFirstLine):
 def print_sim_output(t, observables):
   # Observables is a list of numpy arrays -- representing column simulation data 
   end = time.time()
-  N_tot_s, N_up_s, N_dwn_s, psi_s, Mag_s, M2_s = observables
+  N_tot_s, N_up_s, N_dwn_s, Mag_s, M2_s = observables
+  print('printing total N as a test')
+  print(N_tot_s)
   # Print the results (noise long-time averages)
   print()
   print('Simulation finished: Runtime = ' + str(end - start) + ' seconds')

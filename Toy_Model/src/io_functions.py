@@ -3,7 +3,7 @@ from numpy import linalg
 import yaml
 import math
 import matplotlib
-matplotlib.use('TkAgg')
+#matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 import time
 from scipy.fft import fft 

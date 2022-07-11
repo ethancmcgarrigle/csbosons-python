@@ -1,0 +1,21 @@
+
+model:
+  beta:      1.0
+  ntau:      4
+  hz:        0.4
+  mu:        1.0 
+  h:         0.02
+  U:         0.00
+  gamma:     1.00
+
+simulation:
+  dt:          0.01
+  stepsize:    0.001
+  ntmax:       100000
+  io_interval: 500
+  noise:       true
+  seed:  0
+  isPlotting:  True
+  ETOL:    0.0001
+  max_iters:    500
+  print_iters:   True

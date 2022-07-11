@@ -3,8 +3,8 @@ from numpy import linalg
 import yaml
 import math
 import matplotlib
-matplotlib.rcParams['text.usetex'] = True
-#matplotlib.use('TkAgg')
+# matplotlib.rcParams['text.usetex'] = True
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 import time
 from scipy.fft import fft 
@@ -192,7 +192,8 @@ for l in range(0, numtsteps + 1):
   phi_vector_iter -= mobility * dt * (dS_dphi(phi_vector, _beta1, _beta2) + 1j * _psi)
   num_iters = 0
 
-  for i in range(0, max_iterations + 1):
+  #for i in range(0, max_iterations + 1):
+  #for i in range(0, 1):
     # Do the Naive Euler step
     # calculate y_tilde 
     y_tilde.fill(0.)
@@ -301,7 +302,6 @@ if(not(suppressOutput)):
 if(isPlotting):
   io_functions.plot_CL_traces(t_s, observables)
 
-print(np.mean(num_iters_s[15:-1]))
 
 if(isPlotting):
   plt.figure(13)

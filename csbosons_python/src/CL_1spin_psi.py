@@ -2,8 +2,8 @@ import numpy as np
 import yaml
 import math
 import matplotlib
-#matplotlib.rcParams['text.usetex'] = True
-matplotlib.use('TkAgg')
+matplotlib.rcParams['text.usetex'] = True
+#matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 import time
 from scipy.fft import fft 
@@ -34,7 +34,7 @@ def sech(x):
 
 
 # Parameters 
-pcnt_noise = 0.
+pcnt_noise = 1.
 ntau = 16
 # IC = np.ones(ntau, dtype=np.complex_) * (1/(np.sqrt(2)) + 1j*2/(np.sqrt(3))) 
 IC = np.ones(ntau, dtype=np.complex_) * (1/(np.sqrt(2)) + 1j*0) 

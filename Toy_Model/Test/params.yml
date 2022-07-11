@@ -6,10 +6,10 @@ model:
   gamma:     0.0 
 
 timestepping:
-  dt:          0.0005
-  ntmax:       10000000
-  io_interval: 5000
+  dt:          0.005
+  ntmax:       100000
+  io_interval: 250
   noise:       true
   seed:  0
-  isPlotting:  false
-  lambda_psi:  __lambda_psi__ 
+  isPlotting:  True
+  lambda_psi:  20.0 

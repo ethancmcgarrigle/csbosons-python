@@ -3,8 +3,8 @@ from numpy import linalg
 import yaml
 import math
 import matplotlib
-#matplotlib.rcParams['text.usetex'] = True
-matplotlib.use('TkAgg')
+matplotlib.rcParams['text.usetex'] = True
+#matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 import time
 from scipy.fft import fft 
@@ -17,7 +17,6 @@ import io_functions
 import gradient_descent_Axb as grad_solver
 
 # Helper functions
-
 
 
 def psi_saddle(_h, n):
@@ -107,7 +106,7 @@ def constraint(y, ntau):
 # Load the inputs
 inputfile = str(sys.argv[1]) 
 parameters = io_functions.open_params(inputfile) 
-beta, ntau, _hz, dt, numtsteps, iofreq, seed, isPlotting = parameters
+beta, ntau, _hz, dt, numtsteps, iofreq, seed, isPlotting, _U, gamma_shift = parameters
 np.random.seed(seed)
 
 # inputs for gradient descent
@@ -120,14 +119,14 @@ max_iterations = grad_descent_params['simulation']['max_iters']
 ETOL = float(grad_descent_params['simulation']['ETOL'])
 print_flag = grad_descent_params['simulation']['print_iters']
 
-print()
-print('  Gradient descent inputs : ' )
-print(' stepsize:  ' + str(stepsize))
-print(' maximum iteratons in descent:  ' + str(max_iterations))
-print(' error tolerance :  ' + str(ETOL))
-print(' printing the gradient descent number of iterations? :  ', print_flag)
-print()
-
+ #print()
+ #print('  Gradient descent inputs : ' )
+ #print(' stepsize:  ' + str(stepsize))
+ #print(' maximum iteratons in descent:  ' + str(max_iterations))
+ #print(' error tolerance :  ' + str(ETOL))
+ #print(' printing the gradient descent number of iterations? :  ', print_flag)
+ #print()
+ #
 
 # Set up the simulation 
 
@@ -153,7 +152,7 @@ else:
 if(isPsizero):
   print('Pinning psi to zero')
 else:
-  print('Intializing psi at its saddle point: ')
+  print('Intializing psi to its saddle point: ')
 
 print(_psi)
 print()
@@ -284,7 +283,7 @@ y_iter = np.zeros(4*ntau, dtype=np.complex_)
 
 # Fill G_matrix identity part
 for i in range(0, 4*ntau):
-  G_matrix[i][i] = 1.
+  G_matrix[i,i] = 1.
 
 
 # grad e
@@ -301,7 +300,7 @@ y1 = np.zeros(len(y_iter), dtype=np.complex_)
 y_vector += np.hstack([phi_up, phistar_up, phi_dwn, phistar_dwn])
 
 
-observables = [N_tot_s, N_up_s, N_dwn_s, psi_s, Mag_s, M2_s] 
+observables = [N_tot_avg, N_up_avg, N_dwn_avg, M_avg, M2_avg] 
 io_functions.write_observables("data_projected_Newton.dat", observables, t, True)
 
 opout=open('psi_samples_proj.dat',"w")
@@ -310,35 +309,39 @@ opout.write("{} {} {} {}\n".format(t, _psi.real, _psi.imag, num_iters_s[0]))
 opout.close() 
 
 
-
-
-
 # Timestep using ETD 
 for l in range(0, numtsteps + 1):
   fill_grad_e(phi_up, phi_dwn, phistar_up, phistar_dwn, grad_e)
   fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, _psi, gamma_shift, _U)
   Forces.fill(0.)
-  Forces += np.hstack([dSdphistar_up, dSdphi_up, dSdphistar_dwn, dSdphi_dwn]) 
+  Forces += np.hstack([dSdphi_up, dSdphistar_up, dSdphi_dwn, dSdphistar_dwn]) # Diagonal relaxation 
+  #Forces += np.hstack([dSdphistar_up, dSdphi_up, dSdphistar_dwn, dSdphi_dwn]) # off-diagonal relaxation  
 
   if(len(Forces) != len(all_noises)):
     print('Force and noise vector filled incorrectly -- abort ')
     break
 
 
+  # Off-diagonal relaxation of CS fields --> special noises 
+  # Do we need to do only real noise? 
   # Generate Noise terms and scale  
-  noise_up = np.random.normal(0, 1., ntau) + 1j * np.random.normal(0, 1., ntau)
-  noise_dwn = np.random.normal(0, 1., ntau) + 1j * np.random.normal(0, 1., ntau)
-  noisestar_up = np.conj(noise_up) 
-  noisestar_dwn = np.conj(noise_dwn)
+  #noise_up = np.random.normal(0, 1., ntau) + 1j * np.random.normal(0, 1., ntau)
+  #noise_dwn = np.random.normal(0, 1., ntau) + 1j * np.random.normal(0, 1., ntau)
+  noise_up = np.random.normal(0, 1., ntau) 
+  noise_dwn = np.random.normal(0, 1., ntau) 
+  #noisestar_up = np.conj(noise_up) 
+  #noisestar_dwn = np.conj(noise_dwn)
+  noisestar_up =  np.random.normal(0, 1., ntau) 
+  noisestar_dwn = np.random.normal(0, 1., ntau) 
   all_noises.fill(0.) 
   all_noises += np.hstack([noise_up, noisestar_up, noise_dwn, noisestar_dwn]) 
-  all_noises *= np.sqrt(mobility * dt)
+  all_noises *= np.sqrt(2. * mobility * dt)
 
   # Set up Newton's iteration
   # Use previous psi as initial iterate guess for psi  
   psi_iter = 0. + 1j * 0.
   psi_iter += _psi
-  # initial iterate/guess: phi_vector EM stepped with psi term (typical CL)
+  # initial iterate/guess: phi_vector EM stepped with psi term (typical CL), no noise
   y_iter.fill(0.) # reset to zero 
   y_iter += y_vector
   y_iter -= mobility * dt * Forces
@@ -350,8 +353,12 @@ for l in range(0, numtsteps + 1):
     y_tilde += y_vector 
 
     # unpack y_vector  
-    # Unpack to do operator calculations and block averaging  
-    phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_vector, 4)
+    # Unpack to do operator calculations and block averaging 
+    #if(j == 0): 
+    phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_vector, 4) # use the original phi,phi* for gradE
+ #    else: 
+ #      phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_iter, 4)  # use the current iteration 
+
     fill_grad_e(phi_up, phi_dwn, phistar_up, phistar_dwn, grad_e);
     y_tilde += grad_e * psi_iter  # current psi iteration 
    
@@ -360,6 +367,7 @@ for l in range(0, numtsteps + 1):
     fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, 0., gamma_shift, _U)
     Forces = np.hstack([dSdphistar_up, dSdphi_up, dSdphistar_dwn, dSdphi_dwn]) 
     y_EM = y_tilde - mobility * dt * Forces  + all_noises 
+    
     
     # reset size of y1 vector 
     # fill it with the next iteration  
@@ -370,23 +378,26 @@ for l in range(0, numtsteps + 1):
     d_vector[-1] += constraint(y1, ntau)  # last entry
     # Evalute grad e at y1  
     phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y1, 4)
-    fill_grad_e(phi_up, phi_dwn, phistar_up, phistar_dwn, grad_e);
+    fill_grad_e(phi_up, phi_dwn, phistar_up, phistar_dwn, grad_e); # filling gradE at y_l+1 
 
     y1 -= (grad_e * psi_iter)
     # Take EM step 
     y1 -= y_EM # residuals 
 
     # Where is grad_e evaluated? either y_iter or y_1 or y_EM ?  
-    # Fill G_matrix (only needs to be done once because it's a linear problem)
+    # Refill the G matrix 
     phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_iter, 4)
     fill_grad_e(phi_up, phi_dwn, phistar_up, phistar_dwn, grad_e);
     for i in range(0, 4*ntau): 
-      G_matrix[i][-1] = -2. # final column 
-      G_matrix[i][-1] *= grad_e[i] 
-      G_matrix[-1][i] = 1.   # final row 
-      G_matrix[-1][i] *= grad_e[i] 
+      G_matrix[i,-1] = -2. # final column 
+      G_matrix[i,-1] *= grad_e[i] 
+      G_matrix[-1,i] = 1.   # final row 
+      G_matrix[-1,i] *= grad_e[i] 
 
-    G_matrix[-1][-1] = 0. 
+    G_matrix[-1,-1] = 0. 
+
+    if l == 1:
+      print(G_matrix)
 
     d_vector[0:4*ntau] += y1 
     
@@ -575,11 +586,11 @@ for l in range(0, numtsteps + 1):
     if(ctr %  25):
       print("Completed {} of {} steps".format(l, numtsteps))
     # opout.write("{} {} {} {} {}\n".format(it, Msum.real / Navg, Msum.imag / Navg, psi.real, psi.imag))
-    if(math.isnan(constraint_avg.real)):
+    if(math.isnan(N_tot_avg.real)):
       print("Trajectory diverged -- nan, ending simulation")
       break
 
-    observables = [N_tot_s, N_up_s, N_dwn_s, psi_s, Mag_s, M2_s] 
+    observables = [N_tot_avg, N_up_avg, N_dwn_avg, M_avg, M2_avg] 
     io_functions.write_observables("data_projected_Newton.dat", observables, t, False)
     num_iters_s[ctr] = num_iters_avg 
 
@@ -617,7 +628,9 @@ if(l != numtsteps):
   psi_s = psi_s[0:divergence_index]
 
 
+suppressOutput = False
 # Package observables in a list 
+#observables = [N_tot_avg, N_up_avg, N_dwn_avg, M_avg, M2_avg] 
 observables = [N_tot_s, N_up_s, N_dwn_s, psi_s, Mag_s, M2_s] 
 if(not(suppressOutput)):
   io_functions.print_sim_output(t, observables)

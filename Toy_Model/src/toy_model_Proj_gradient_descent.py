@@ -176,7 +176,7 @@ for i in range(0, 3):
   G_matrix[i][3] = -2. 
   G_matrix[3][i] = 1.  
 
-# grad e
+# grad e is just ones in this model 
 grad_e = np.ones(len(phi_vector), dtype=np.complex_)
 phi_vector_iter = np.zeros(len(phi_vector), dtype=np.complex_) 
 y_tilde = np.zeros(len(phi_vector), dtype=np.complex_) 
@@ -217,7 +217,7 @@ for l in range(0, numtsteps + 1):
     y_tilde.fill(0.)
     y_tilde += phi_vector
     y_tilde += grad_e * psi_iter  # current psi iteration 
-    # Do Euler maruyama on y_tilde
+    # 2. Do a 1-step Langevin step (Euler maruyama since this model is simple) on y_tilde
     y_EM = y_tilde - mobility * dt * (dS_dphi(y_tilde, _beta1, _beta2)) + noises
     
     # reset size of y1 vector back to 3 entries

@@ -108,8 +108,6 @@ def print_sim_output(t, observables):
   # Observables is a list of numpy arrays -- representing column simulation data 
   end = time.time()
   N_tot_s, N_up_s, N_dwn_s, Mag_s, M2_s = observables
-  print('printing total N as a test')
-  print(N_tot_s)
   # Print the results (noise long-time averages)
   print()
   print('Simulation finished: Runtime = ' + str(end - start) + ' seconds')

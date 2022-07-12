@@ -37,7 +37,7 @@ def sech(x):
 
 
 
-def fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, _psi, _gamma, U):
+def fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, _psi, _gamma, U, hz, beta):
   dSdphistar_up.fill(0.)
   dSdphistar_dwn.fill(0.)
   dSdphi_up.fill(0.)
@@ -48,15 +48,15 @@ def fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphis
     # PBC 
     itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
     # Build force vector 
-    dSdphistar_up[itau] += phi_up[itau] - phi_up[itaum1] + 1j * phi_up[itaum1] * _psi / ntau + phi_up[itaum1] * _gamma/ntau 
+    dSdphistar_up[itau] += phi_up[itau] - phi_up[itaum1] + 1j * phi_up[itaum1] * _psi / ntau + ((beta * hz / ntau) * phi_up[itaum1]) +   phi_up[itaum1] * _gamma/ntau 
     dSdphistar_up[itau] += U * (1./ntau) * phi_up[itaum1] * phi_up[itaum1] * phistar_up[itau]
-    dSdphi_up[itaum1] += phistar_up[itaum1] - phistar_up[itau] + 1j * phistar_up[itau] * _psi / ntau + phistar_up[itau] * _gamma/ntau 
+    dSdphi_up[itaum1] += phistar_up[itaum1] - phistar_up[itau] + 1j * phistar_up[itau] * _psi / ntau + phistar_up[itau] * _gamma/ntau + ((beta * hz / ntau) * phistar_up[itau]) 
     dSdphi_up[itaum1] += U * (1./ntau) * phistar_up[itau] * phi_up[itaum1] * phistar_up[itau]
 
-    dSdphistar_dwn[itau] += phi_dwn[itau] - phi_dwn[itaum1] + 1j * phi_dwn[itaum1] * _psi / ntau + phi_dwn[itaum1] * _gamma/ntau 
-    dSdphistar_dwn[itau] += U * (1./ntau) * phi_dwn[itaum1] * phi_dwn[itaum1] * phistar_dwn[itau]
-    dSdphi_dwn[itaum1] += phistar_dwn[itaum1] - phistar_dwn[itau] + 1j * phistar_dwn[itau] * _psi/ ntau + phistar_dwn[itau] * _gamma/ntau 
-    dSdphi_dwn[itaum1] += U * (1./ntau) * phistar_dwn[itau] * phi_dwn[itaum1] * phistar_dwn[itau]
+    dSdphistar_dwn[itau] += phi_dwn[itau] - phi_dwn[itaum1] + 1j * phi_dwn[itaum1] * _psi / ntau + phi_dwn[itaum1] * _gamma/ntau - ((beta * hz / ntau) * phi_dwn[itaum1]) 
+    dSdphistar_dwn[itau] += beta * U * (1./ntau) * phi_dwn[itaum1] * phi_dwn[itaum1] * phistar_dwn[itau]
+    dSdphi_dwn[itaum1] += phistar_dwn[itaum1] - phistar_dwn[itau] + 1j * phistar_dwn[itau] * _psi/ ntau + phistar_dwn[itau] * _gamma/ntau  - ((beta * hz / ntau) * phistar_dwn[itau])
+    dSdphi_dwn[itaum1] += beta * U * (1./ntau) * phistar_dwn[itau] * phi_dwn[itaum1] * phistar_dwn[itau]
 
 
 
@@ -312,7 +312,7 @@ opout.close()
 # Timestep using ETD 
 for l in range(0, numtsteps + 1):
   fill_grad_e(phi_up, phi_dwn, phistar_up, phistar_dwn, grad_e)
-  fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, _psi, gamma_shift, _U)
+  fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, _psi, gamma_shift, _U, _hz, beta)
   Forces.fill(0.)
   Forces += np.hstack([dSdphi_up, dSdphistar_up, dSdphi_dwn, dSdphistar_dwn]) # Diagonal relaxation 
   #Forces += np.hstack([dSdphistar_up, dSdphi_up, dSdphistar_dwn, dSdphi_dwn]) # off-diagonal relaxation  
@@ -364,7 +364,7 @@ for l in range(0, numtsteps + 1):
    
     # Do Euler maruyama on y_tilde
     phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_tilde, 4)
-    fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, 0., gamma_shift, _U)
+    fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, 0., gamma_shift, _U, _hz, beta)
     Forces = np.hstack([dSdphistar_up, dSdphi_up, dSdphistar_dwn, dSdphi_dwn]) 
     y_EM = y_tilde - mobility * dt * Forces  + all_noises 
     
@@ -628,7 +628,7 @@ if(l != numtsteps):
   psi_s = psi_s[0:divergence_index]
 
 
-suppressOutput = False
+suppressOutput = True
 # Package observables in a list 
 #observables = [N_tot_avg, N_up_avg, N_dwn_avg, M_avg, M2_avg] 
 observables = [N_tot_s, N_up_s, N_dwn_s, psi_s, Mag_s, M2_s] 

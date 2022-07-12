@@ -1,12 +1,12 @@
 
 model:
   beta:      1.0
-  ntau:      4
-  hz:        0.4
+  ntau:      12
+  hz:        0.2
   mu:        1.0 
   h:         0.02
   U:         0.00
-  gamma:     1.00
+  gamma:     0.25
 
 simulation:
   dt:          0.01
@@ -16,6 +16,6 @@ simulation:
   noise:       true
   seed:  0
   isPlotting:  True
-  ETOL:    0.0001
+  ETOL:    0.000001
   max_iters:    500
   print_iters:   True

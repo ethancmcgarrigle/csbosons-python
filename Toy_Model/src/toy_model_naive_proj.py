@@ -169,9 +169,9 @@ max_iterations = 250
 
 
 observables = [constraint_avg, Tr_U_avg, Tr_Usq_avg, Tr_U_Udag_avg, rho_avg]
-io_functions.write_observables("data_projected.dat", observables, t, True)
+io_functions.write_observables("data_projected_naive.dat", observables, t, True)
 
-opout=open('operators_psi_proj.dat',"w")
+opout=open('operators_psi_proj_naive.dat',"w")
 opout.write("# t_elapsed psi.real psi.imag avg_iters_per_dt \n")
 opout.write("{} {} {} {}\n".format(t, _psi.real, _psi.imag, num_iters_s[0]))
 opout.close() 

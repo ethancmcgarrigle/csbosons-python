@@ -247,10 +247,10 @@ for l in range(0, numtsteps + 1):
       break
 
     observables = [constraint_avg, Tr_U_avg, Tr_Usq_avg, Tr_U_Udag_avg, rho_avg]
-    io_functions.write_observables("data_projected.dat", observables, t, False)
+    io_functions.write_observables("data_projected_naive.dat", observables, t, False)
     num_iters_s[ctr] = num_iters_avg 
 
-    opout=open('operators_psi_proj.dat',"a")
+    opout=open('operators_psi_proj_naive.dat',"a")
     opout.write("{} {} {} {}\n".format(t, _psi.real, _psi.imag, num_iters_avg))
     opout.close() 
 

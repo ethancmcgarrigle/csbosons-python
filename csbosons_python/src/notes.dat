@@ -1,0 +1,10 @@
+1. the lagrange multiplier initial choice is monumentally important 
+   - I observed a linear growth of constraint error with time when I was starting from \lambda \neq 0 initial conditions, this happens faster with larger \Delta t timesteps 
+   - for ideal gas testing, the algorithm appears to be working correctly — the constraint is satisfied precisely at each Langevin iteration. The warmup takes about 3 - 4 iterations, while the rest of Langevin iterations get it done in only 1 Ax = b solve.  
+
+
+2. Does this still work for the Bose fluid? 
+
+
+3. For the Bose gas, do we get the correct values for the pressure operator? 
+   - Code pressure operator into CL_bosefluid.py, and then cp the fxn into the projected script file  

@@ -50,7 +50,12 @@ def fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, _ensemble, _g, _be
   for itau in range(0, int(ntau)):
     # PBC 
     itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
-    # Build force vector 
+
+ #    # If we are doing diagonal force stepping, we must include the linear parts that were omitted 
+ #    if(not _isOffDiagonal):
+ #      dSdphistar[itau] += A_nk(itau, ntau, _beta, k2_grid, _lambda 
+    # Build force vector
+    # nonlinear forces  
     dSdphistar[:, itau] += _g * dtau * phi[:, itaum1] * phi[:, itaum1] * phistar[:, itau]
     dSdphi[:, itaum1] += _g * dtau * phistar[:, itau] * phi[:, itaum1] * phistar[:, itau]
     if(_ensemble == "CANONICAL"):
@@ -87,6 +92,7 @@ def integrate_r_intensive(field):
     N_spatial = len(field)
     result = np.sum(field)/N_spatial
     return result
+
 
 
 
@@ -127,39 +133,172 @@ def ifft_dp1(_CSfield):
     return _CSfield
 
 
-
- #def fft_tau_to_omega(_CSfield):
- #    field_tmp = _CSfield[0]
  #
- #def fft_k_to_r(_CSfield):
- #    field_tmp = _CSfield[0]
+ #
+ ## d-dimensional Fourier Transforms --- passed test check for normalization  
+ #def fft_rtok(_CSfield, _dontScale=True):
+ #    # d+1 Fourier transform of a CS field object -- 2D numpy array \in C^ (Nx**dim , ntau)
+ #    ntau = len(_CSfield[0,:])
+ #    N_spatial = len(_CSfield)
+ #
+ #    # Spatial Fourier transform -- column-by-column i.e. each tau slice is FFT'd 
+ #    for j in range(0, ntau):
+ #      _CSfield[:,j] = fft(_CSfield[:, j])
+ #
+ #    # Now do the Fourier transform in imaginary time to Matsubara freq.
+ #
+ # #    for m in range(0, N_spatial):
+ # #      _CSfield[m,:] = fft(_CSfield[m, :])
+ #
+ #    return _CSfield
+ #
+ #
+ #def ifft_ktor(_CSfield):
+ #    # d+1 Fourier transform of a CS field object -- 2D numpy array \in C^ (Nx**dim , ntau)
+ #    ntau = len(_CSfield[0,:])
+ #    N_spatial = len(_CSfield)
+ #
+ #    # Spatial Fourier transform -- column-by-column i.e. each tau slice is FFT'd 
+ #    for j in range(0, ntau):
+ #      #_CSfield[:,j] = ifft(_CSfield[:, j]) * N_spatial
+ #      _CSfield[:,j] = ifft(_CSfield[:, j]) 
+ # 
+ #    # Now do the Fourier transform in imaginary time to Matsubara freq.
+ #
+ # #    for m in range(0, N_spatial):
+ # #      #_CSfield[m,:] = ifft(_CSfield[m, :]) * ntau
+ # #      _CSfield[m,:] = ifft(_CSfield[m, :])
+ #
+ #    return _CSfield
 
- #def fft_omega_to_tau(_CSfield):
- #    field_tmp = _CSfield[0]
+
+
+
+def constraint_err(_N_input, phi, phistar):
+    # Function for calculation the constraint error
+    N_spatial = len(phi)
+    tmp = np.zeros(N_spatial, dtype=np.complex_)
+    Ntau = len(phi[0, :]) 
+    for itau in range(0, Ntau):
+      itaum1 = ( (int(itau) - 1) % int(Ntau) + int(Ntau)) % int(Ntau)
+      tmp += phistar[:, itau] * phi[:, itaum1]
+    tmp *= 1./Ntau
+
+    constraint_residual = integrate_r_intensive(tmp) * Vol
+    constraint_residual -= _N_input
+    return constraint_residual  # should be near zero 
+
+
+
+def ETD(phi, phistar, _dSdphistar, _dSdphi, _lincoef, _nonlincoef, noisescl, _CLnoise):
+    ntau = len(phi[0, :])
+    N_spatial = len(phi)
+    # Exponential-Time-Differencing, assumes off-diagonal stepping 
+
+    # Function to step phi and phistar with ETD  
+    phi = fft_dp1(phi) * _lincoef 
+    phistar = fft_dp1(phistar) * np.conj(_lincoef) 
+
+    # add nonlinear term, off-diagonal relaxation 
+    phi += (fft_dp1(_dSdphistar) * _nonlincoef)
+    phistar += (fft_dp1(_dSdphi) * np.conj(_nonlincoef))
+
+    # noise
+    noise = np.zeros((N_spatial, ntau), dtype=np.complex_)
+    noisestar = np.zeros((N_spatial, ntau), dtype=np.complex_)
+
+    noise.fill(0.) 
+    noisestar.fill(0.) 
+
+    if(_CLnoise):
+      # ETD assumes off-diagonal stepping, generate nosie and scale  
+      noise = np.random.normal(0, 1., (N_spatial, ntau)) + 1j * np.random.normal(0, 1., (N_spatial, ntau))
+      noisestar = np.conj(noise) 
+      # FFT and Scale by fourier coeff 
+      noise = fft_dp1(noise) * noisescl 
+      noisestar = fft_dp1(noisestar) * np.conj(noisescl) 
+
+    # Add the noise 
+    if(_CLnoise): 
+      phi += noise 
+      phistar += noisestar 
+
+    # inverse fft  
+    phi = ifft_dp1(phi) 
+    phistar = ifft_dp1(phistar) 
+
+    return [phi, phistar]
+    # Return state vector (packaged phi/phistar vector)
+
+
+
+def EM(phi, phistar, dSdphistar, dSdphi, _isOffDiagonal, _CLnoise, dV, dt):
+    # Function to step phi and phistar with ETD  
+    ntau = len(phi[0, :])
+    N_spatial = len(phi[:, 0])
+
+    # noise
+    noise = np.zeros((N_spatial, ntau), dtype=np.complex_)
+    noisestar = np.zeros((N_spatial, ntau), dtype=np.complex_)
+    noise.fill(0.) 
+    noisestar.fill(0.) 
+    #mobility = ntau
+    mobility = 1. 
+    noisescl_scalar = np.sqrt(mobility * dt / dV)
+
+    if(_isOffDiagonal):
+      phi -= dSdphistar * mobility * dt 
+      phistar -= dSdphi * mobility * dt
+      if(_CLnoise): 
+        noise = np.random.normal(0, 1., (N_spatial, ntau)) + 1j * np.random.normal(0, 1., (N_spatial, ntau))
+        noisestar = np.conj(noise)
+    else:
+      noisescl_scalar *= np.sqrt(2.) # Real noise, FDT 
+      phi -= dSdphi * mobility * dt 
+      phistar -= dSdphistar * mobility * dt
+      # For diagonal stepping, generate real noise  
+      if(_CLnoise): 
+        noise = np.random.normal(0, 1., (N_spatial, ntau))  
+        noisestar = np.random.normal(0, 1., (N_spatial, ntau)) 
+
+
+    # Scale and Add the noise 
+    if(_CLnoise): 
+      noise *= noisescl_scalar
+      noisestar *= noisescl_scalar
+
+      phi += noise 
+      phistar += noisestar 
+
+    return [phi, phistar]
 
 
 
 
 # Parameters
 ensemble = 'CANONICAL'
-_mu = 0.5
-_g = 0.10    # ideal gas if == 0 
-ntau = 50
+_mu = -1.0
+_g = 0.00    # ideal gas if == 0 
+ntau = 20
 dim = 3
 Nx = 4
 L = 50  # simulation box size 
 Vol = L**dim
 
-N_input = 1000
+N_input = 25   # particle number input 
 
 N_spatial = Nx**dim
 
 dV = Vol/N_spatial
 
 #IC = np.ones((N_spatial, ntau), dtype=np.complex_) * (1/(np.sqrt(2)) + 1j*0) 
-IC = np.zeros((N_spatial, ntau), dtype=np.complex_) 
+IC = np.zeros((N_spatial, ntau), dtype=np.complex_)
+if _g == 0:
+  IC += np.sqrt(N_input/Vol) 
+else:
+  IC += np.sqrt(_mu/_g) # homogeneous initial condition  
 beta = 1.0
-lambda_psi = 0.01
+lambda_psi = 0.005
 _lambda = 6.0505834240
 
 dt = 0.005
@@ -171,7 +310,7 @@ dt = 0.005
 
 
 numtsteps = 100000
-iofreq = 1000     # print every 1000 steps 
+iofreq = 1000    # print every 1000 steps 
 #iofreq = 100 #  print every 1000 steps 
 
 num_points = math.floor(numtsteps/iofreq)
@@ -246,8 +385,6 @@ dtau = beta/ntau
 noise = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 noisestar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 
-L_phi = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-Lstar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 
 # Compute the linear and non-linear coefficients once since they are complex scalars and not a function of the configuration for a single spin in this model 
 lincoef = np.zeros((Nx**dim, ntau), dtype=np.complex_)
@@ -305,10 +442,14 @@ for itau in range(0, int(ntau)):
 # scale by ntau
 N = integrate_r_intensive(rho/ntau) * Vol
 
+print('initial particle number: ' + str(N))
+print()
+print('initial (average) density : ' + str(N/Vol))
+
 N2 = N**2 
 
 psi_s[0] = _psi
-N_tot_s[0] = N_tot
+N_tot_s[0] = N 
 N2_s[0] = N2
 
 # initialize the fictitious time 
@@ -332,57 +473,58 @@ for j in range(0, ntau):
 N_tot_avg = 0. + 1j*0 
 N2_avg = 0. + 1j*0
 
+e_residual_avg = 0 + 1j*0
+
 ctr = 1
 
+_isOffDiagonal = True
+_ETD = True
 
 start = time.time()
 
+
+# Precompute any additional force containers 
+# Use the appropriate time stepper  
+if(not _ETD):
+  # For EM, need to add the linear part of the force to the nonlinear force container 
+  tmp = np.zeros((N_spatial, ntau), dtype=np.complex_)
+  tmpstar = np.zeros((N_spatial, ntau), dtype=np.complex_)
+  # Fill the CS-field containers 
+  for j in range(0, ntau):
+    tmp[:, j] = A_nk(j, ntau, beta, _k2_grid, _lambda, ensemble, _mu) 
+    tmpstar[:, j] = np.conj(tmp[:, j]) 
+
+
 # Timestep using ETD 
 for l in range(0, numtsteps + 1):
-  L_phi.fill(0.)
-  Lstar.fill(0.)
 
-  # Perform index shifts to get N, N* vectors  
-  for itau in range(0, int(ntau)):
-    # PBC 
-    itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
-    L_phi[:,itau] += phi[:,itaum1]
-    Lstar[:,itaum1] += phistar[:,itau]
-
-  #nonlinforce = 1j * _psi / ntau 
-  # nonlinforce = (1j * _psi / ntau) + (dTau * _U * np.sinh(N_tot - 1.))
-
-  # Update the nonlinear forces before stepping 
+  # Update the nonlinear forces before stepping; fill forces clears dSdphistar and dSdphi 
   fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, ensemble, _g, beta)
-  #print(dSdphi)
 
-  # linear term
-  # FFT the vectors  
-  # FFT r to k and itau to \omega 
-  phi = fft_dp1(phi) * lincoef 
-  phistar = fft_dp1(phistar) * np.conj(lincoef) 
+  # For ETD, can proceed; for EM, must add linear force contributions to the conatiners  
+  if(not _ETD):
+    # d+1 FFT force container
+    dSdphistar = fft_dp1(dSdphistar) 
+    dSdphi = fft_dp1(dSdphi) 
+    # Add linearized contributions 
+    dSdphistar += tmp * fft_dp1(phi)
+    dSdphi += np.conj(tmp) * fft_dp1(phistar)
 
-  # add nonlinear term, off-diagonal relaxation 
-  phi += (fft_dp1(dSdphistar) * nonlincoef)
-  phistar += (fft_dp1(dSdphi) * np.conj(nonlincoef))
+    # need to iFFT phi and phistar
+    phi = ifft_dp1(phi) 
+    phistar = ifft_dp1(phistar)
 
-  # Generate Noise terms
-  noise.fill(0.) 
-  noisestar.fill(0.) 
-  noise = np.random.normal(0, 1., (N_spatial, ntau)) + 1j * np.random.normal(0, 1., (N_spatial, ntau))
-  noisestar = np.conj(noise) 
-  
-  # FFT and Scale by fourier coeff 
-  noise = fft_dp1(noise) * noisescl 
-  noisestar = fft_dp1(noisestar) * np.conj(noisescl) 
+    # inverse d+1 FFT force container
+    dSdphistar = ifft_dp1(dSdphistar) 
+    dSdphi = ifft_dp1(dSdphi) 
 
-  if(_CLnoise):  
-    phi += noise 
-    phistar += noisestar 
+    # Do EM step 
+    phi, phistar = EM(phi, phistar, dSdphistar, dSdphi, _isOffDiagonal, _CLnoise, dV, dt)
+  else:   
+    phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, nonlincoef, noisescl, _CLnoise)
 
-  # inverse fft  
-  phi = ifft_dp1(phi) 
-  phistar = ifft_dp1(phistar) 
+
+  # ---- Calculate and Update Observables ------- 
 
   # Calculate the particle numbers
   N_tot = 0.
@@ -414,6 +556,8 @@ for l in range(0, numtsteps + 1):
   N_tot_avg += N_tot/iofreq 
   N2_avg += N2/iofreq
 
+  e_residual_avg = constraint_err(N_input, phi, phistar)/iofreq
+
   t += dt
 
   # Output on interval
@@ -424,12 +568,15 @@ for l in range(0, numtsteps + 1):
      t_s[ctr] = t 
      N_tot_s[ctr] = N_tot_avg 
      N2_s[ctr] = N2_avg
+
     
      if(ensemble == "CANONICAL"):
        psi_s[ctr] = _psi
+       print('Constraint Residual: ' + str(e_residual_avg))
      # clear the averages 
      N2_avg = 0. + 1j*0 
      N_tot_avg = 0. + 1j*0 
+     e_residual_avg = 0. + 1j*0 
      ctr += 1
 
     

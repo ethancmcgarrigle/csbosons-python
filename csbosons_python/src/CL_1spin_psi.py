@@ -33,22 +33,103 @@ def sech(x):
 	return 1/(np.cosh(x))
 
 
+
+
+def EM(phi_up, phistar_up, phi_dwn, phistar_dwn, dSdphistar_up, dSdphi_up, dSdphistar_dwn, dSdphi_dwn, dt, _isOffDiagonal=True):
+    # Function to step phi and phistar with ETD  
+    ntau = len(phi_up)
+    mobility = ntau
+    noise_up = np.zeros(ntau, dtype=np.complex_)
+    noise_dwn= np.zeros(ntau, dtype=np.complex_)
+    noisestar_up = np.zeros(ntau, dtype=np.complex_)
+    noisestar_dwn = np.zeros(ntau, dtype=np.complex_)
+    noise_up.fill(0.) 
+    noisestar_up.fill(0.) 
+    noise_dwn.fill(0.) 
+    noisestar_dwn.fill(0.) 
+
+
+    if(_isOffDiagonal):
+      phi_up -= dSdphistar_up * mobility * dt 
+      phistar_up -= dSdphi_up * mobility * dt 
+      phi_dwn -= dSdphistar_dwn * mobility * dt 
+      phistar_dwn -= dSdphi_dwn * mobility * dt 
+      # Generate Noise terms 
+
+      noisescl = np.sqrt(dt * ntau)
+
+      noise_up = np.random.normal(0, 1., ntau) + 1j * np.random.normal(0, 1., ntau)
+      noise_dwn = np.random.normal(0, 1., ntau) + 1j * np.random.normal(0, 1., ntau)
+      noisestar_up = np.conj(noise_up) 
+      noisestar_dwn = np.conj(noise_dwn) 
+
+    else:
+      phi_up -= dSdphi_up * mobility * dt 
+      phistar_up -= dSdphistar_up * mobility * dt
+      phi_dwn -= dSdphi_dwn * mobility * dt 
+      phistar_dwn -= dSdphistar_dwn * mobility * dt
+      # For diagonal stepping, generate real noise  
+      noise_up = np.random.normal(0, 1., ntau) 
+      noise_dwn = np.random.normal(0, 1., ntau) 
+      noisestar_up = np.random.normal(0, 1., ntau)  
+      noisestar_dwn = np.random.normal(0, 1., ntau) 
+
+      # Scale then noises 
+      noisescl = np.sqrt(2. * dt * ntau)
+
+    # Scale the noises, then add 
+    noise_up *= noisescl
+    noise_dwn  *= noisescl
+    noisestar_up *= noisescl
+    noisestar_dwn  *= noisescl
+
+    phi_up += noise_up 
+    phistar_up += noisestar_up 
+    phi_dwn += noise_dwn 
+    phistar_dwn += noisestar_dwn 
+
+    return [phi_up, phistar_up, phi_dwn, phistar_dwn]
+
+
+def fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, _psi, _gamma, U, hz, beta):
+  dSdphistar_up.fill(0.)
+  dSdphistar_dwn.fill(0.)
+  dSdphi_up.fill(0.)
+  dSdphi_dwn.fill(0.)
+
+  # Build force vector 
+  for itau in range(0, ntau):
+    # PBC 
+    itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
+    # Build force vector 
+    dSdphistar_up[itau] += phi_up[itau] - phi_up[itaum1] + 1j * phi_up[itaum1] * _psi / ntau + ((beta * hz / ntau) * phi_up[itaum1]) +   phi_up[itaum1] * _gamma/ntau 
+    dSdphistar_up[itau] += U * (1./ntau) * phi_up[itaum1] * phi_up[itaum1] * phistar_up[itau]
+    dSdphi_up[itaum1] += phistar_up[itaum1] - phistar_up[itau] + 1j * phistar_up[itau] * _psi / ntau + phistar_up[itau] * _gamma/ntau + ((beta * hz / ntau) * phistar_up[itau]) 
+    dSdphi_up[itaum1] += U * (1./ntau) * phistar_up[itau] * phi_up[itaum1] * phistar_up[itau]
+
+    dSdphistar_dwn[itau] += phi_dwn[itau] - phi_dwn[itaum1] + 1j * phi_dwn[itaum1] * _psi / ntau + phi_dwn[itaum1] * _gamma/ntau - ((beta * hz / ntau) * phi_dwn[itaum1]) 
+    dSdphistar_dwn[itau] += beta * U * (1./ntau) * phi_dwn[itaum1] * phi_dwn[itaum1] * phistar_dwn[itau]
+    dSdphi_dwn[itaum1] += phistar_dwn[itaum1] - phistar_dwn[itau] + 1j * phistar_dwn[itau] * _psi/ ntau + phistar_dwn[itau] * _gamma/ntau  - ((beta * hz / ntau) * phistar_dwn[itau])
+    dSdphi_dwn[itaum1] += beta * U * (1./ntau) * phistar_dwn[itau] * phi_dwn[itaum1] * phistar_dwn[itau]
+
+
+
 # Parameters 
-pcnt_noise = 1.
-ntau = 16
+pcnt_noise = 0.00
+ntau = 12
 # IC = np.ones(ntau, dtype=np.complex_) * (1/(np.sqrt(2)) + 1j*2/(np.sqrt(3))) 
 IC = np.ones(ntau, dtype=np.complex_) * (1/(np.sqrt(2)) + 1j*0) 
 numspecies = 2 
 beta = 1.0
-lambda_psi = 0.05
-# _gamma = 2.0
-_hz = 0.0
-_U = 0.00
+lambda_psi = 0.001
+_gamma = 0.25
+_hz = 0.10
+_U = 0.20
 
-dt = 0.0015
+dt = 0.001
 
-numtsteps = 500000
-iofreq = 1500 # print every 1000 steps 
+numtsteps = 100000
+iofreq = 2000 # print every 1000 steps 
 
 num_points = math.floor(numtsteps/iofreq)
 
@@ -60,6 +141,11 @@ if(isPsizero):
   _psi = 0.
 else:
   _psi += psi_saddle(_hz, int(0)) # choose 0th mode 
+
+
+_isOffDiagonal = True
+_ETD = True
+
 
 print()
 print()
@@ -83,6 +169,24 @@ else:
   print('Intializing psi at its saddle point: ')
 
 print(_psi)
+print()
+print()
+print('Percentage psi noise: ' + str(pcnt_noise))
+print()
+print('is off diagonal?? ' + str(_isOffDiagonal))
+print()
+print('ETD time stepping? ')
+print()
+if(_ETD):
+  print('yes, stepping with ETD')
+  print('off diagonal boolean is ignored')
+else:
+  print('no, stepping with EM')
+  if(_isOffDiagonal):
+    print(' stepping with off-digaonal forces')
+  else:
+    print(' stepping with off-digaonal forces')
+print()
 print()
 print('Complex Langevin Sampling')
 print()
@@ -108,6 +212,10 @@ phistar_dwn += IC
 
 dTau = beta/ntau
 
+dSdphistar_up = np.zeros(ntau, dtype=np.complex_) 
+dSdphi_up = np.zeros(ntau, dtype=np.complex_) 
+dSdphistar_dwn = np.zeros(ntau, dtype=np.complex_) 
+dSdphi_dwn = np.zeros(ntau, dtype=np.complex_) 
 
 noise_up = np.zeros(ntau, dtype=np.complex_)
 noise_dwn= np.zeros(ntau, dtype=np.complex_)
@@ -167,8 +275,10 @@ M2_s[0] = M2
 t = 0.
 
 for i in range(0, ntau):
-  lincoef_up[i] = A_nk(int(i), ntau, beta, 0, _hz, _U)
-  lincoef_dwn[i] = A_nk(int(i), ntau, beta, 1, _hz, _U)
+  lincoef_up[i] = A_nk(int(i), ntau, beta, 0, _hz, 0.)
+  lincoef_dwn[i] = A_nk(int(i), ntau, beta, 1, _hz, 0.)
+ #  lincoef_up[i] = A_nk(int(i), ntau, beta, 0, _hz, _U)
+ #  lincoef_dwn[i] = A_nk(int(i), ntau, beta, 1, _hz, _U)
 
   # Correct diverging terms by using Euler limit of ETD 
   if(lincoef_up[i] == 0.):
@@ -221,44 +331,51 @@ for l in range(0, numtsteps + 1):
   # nonlinforce = (1j * _psi / ntau) + (dTau * _U * np.sinh(N_tot - 1.))
   # linear term
   # FFT the vectors   
-  phi_up = fft(phi_up) * lincoef_up 
-  phi_dwn = fft(phi_dwn) * lincoef_dwn 
-  phistar_up = fft(phistar_up) * np.conj(lincoef_up) 
-  phistar_dwn = fft(phistar_dwn) * np.conj(lincoef_dwn)
-
-  # add nonlinear term 
-  phi_up += (fft(L_up * nonlinforce) * nonlincoef_up)
-  phi_dwn += (fft(L_dwn * nonlinforce) * nonlincoef_dwn)
-  phistar_up += (fft(Lstar_up * nonlinforce) * np.conj(nonlincoef_up))
-  phistar_dwn += (fft(Lstar_dwn * nonlinforce) * np.conj(nonlincoef_dwn))
-
-  # Generate Noise terms 
-  noise_up = np.random.normal(0, 1., ntau) + 1j * np.random.normal(0, 1., ntau)
-  noise_dwn = np.random.normal(0, 1., ntau) + 1j * np.random.normal(0, 1., ntau)
-  noisestar_up = np.conj(noise_up) 
-  noisestar_dwn = np.conj(noise_dwn) 
+  if(_ETD):
+    phi_up = fft(phi_up) * lincoef_up 
+    phi_dwn = fft(phi_dwn) * lincoef_dwn 
+    phistar_up = fft(phistar_up) * np.conj(lincoef_up) 
+    phistar_dwn = fft(phistar_dwn) * np.conj(lincoef_dwn)
   
-  noise_up = np.array(noise_up)
-  noise_dwn = np.array(noise_dwn)
-  noisestar_up = np.array(noisestar_up)
-  noisestar_dwn = np.array(noisestar_dwn)
+    # add nonlinear term 
+    phi_up += (fft(L_up * nonlinforce) * nonlincoef_up)
+    phi_dwn += (fft(L_dwn * nonlinforce) * nonlincoef_dwn)
+    phistar_up += (fft(Lstar_up * nonlinforce) * np.conj(nonlincoef_up))
+    phistar_dwn += (fft(Lstar_dwn * nonlinforce) * np.conj(nonlincoef_dwn))
   
-  # FFT and Scale by fourier coeff 
-  noise_up = fft(noise_up) * noisescl_up 
-  noise_dwn = fft(noise_dwn) * noisescl_dwn
-  noisestar_up = fft(noisestar_up) * np.conj(noisescl_up) 
-  noisestar_dwn = fft(noisestar_dwn) * np.conj(noisescl_dwn) 
+    # Generate Noise terms 
+    noise_up = np.random.normal(0, 1., ntau) + 1j * np.random.normal(0, 1., ntau)
+    noise_dwn = np.random.normal(0, 1., ntau) + 1j * np.random.normal(0, 1., ntau)
+    noisestar_up = np.conj(noise_up) 
+    noisestar_dwn = np.conj(noise_dwn) 
+    
+    noise_up = np.array(noise_up)
+    noise_dwn = np.array(noise_dwn)
+    noisestar_up = np.array(noisestar_up)
+    noisestar_dwn = np.array(noisestar_dwn)
+    
+    # FFT and Scale by fourier coeff 
+    noise_up = fft(noise_up) * noisescl_up 
+    noise_dwn = fft(noise_dwn) * noisescl_dwn
+    noisestar_up = fft(noisestar_up) * np.conj(noisescl_up) 
+    noisestar_dwn = fft(noisestar_dwn) * np.conj(noisescl_dwn) 
+    
+    phi_up += noise_up 
+    phi_dwn += noise_dwn 
+    phistar_up += noisestar_up 
+    phistar_dwn += noisestar_dwn 
   
-  phi_up += noise_up 
-  phi_dwn += noise_dwn 
-  phistar_up += noisestar_up 
-  phistar_dwn += noisestar_dwn 
+    # inverse fft  
+    phi_up = ifft(phi_up) * ntau
+    phi_dwn = ifft(phi_dwn) * ntau
+    phistar_up = ifft(phistar_up) * ntau
+    phistar_dwn = ifft(phistar_dwn) * ntau
+  else: # i.e. do EM 
+    fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, _psi, _gamma, _U, _hz, beta)
+    phi_up, phistar_up, phi_dwn, phistar_dwn  = EM(phi_up, phistar_up, phi_dwn, phistar_dwn, dSdphistar_up, dSdphi_up, dSdphistar_dwn, dSdphi_dwn, dt, _isOffDiagonal)
 
-  # inverse fft  
-  phi_up = ifft(phi_up) * ntau
-  phi_dwn = ifft(phi_dwn) * ntau
-  phistar_up = ifft(phistar_up) * ntau
-  phistar_dwn = ifft(phistar_dwn) * ntau
+
+
 
   # Calculate the particle numbers
   N_up = 0.

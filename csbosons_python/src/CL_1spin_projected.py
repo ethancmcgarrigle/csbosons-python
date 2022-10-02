@@ -59,6 +59,28 @@ def fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphis
     dSdphi_dwn[itaum1] += beta * U * (1./ntau) * phistar_dwn[itau] * phi_dwn[itaum1] * phistar_dwn[itau]
 
 
+def EM(phi, phistar, dSdphistar, dSdphi, _isOffDiagonal):
+    # Function to step phi and phistar with ETD  
+    noise.fill(0.) 
+    noisestar.fill(0.) 
+
+    if(_isOffDiagonal):
+      phi -= dSdphistar * mobility * dt 
+      phistar -= dSdphi * mobility * dt 
+      noise = np.random.normal(0, 1., (N_spatial, ntau)) + 1j * np.random.normal(0, 1., (N_spatial, ntau))
+      noisestar = np.conj(noise) 
+    else:
+      phi -= dSdphi * mobility * dt 
+      phistar -= dSdphistar * mobility * dt
+      # For diagonal stepping, generate real noise  
+      noise = np.random.normal(0, 1., (N_spatial, ntau))  
+      noisestar = np.random.normal(0, 1., (N_spatial, ntau)) 
+
+    # Add the noise 
+    phi += _noise 
+    phistar += _noisestar 
+
+    return [phi, phistar]
 
 
 def fill_grad_e(phi_up, phi_dwn, phistar_up, phistar_dwn, grad_e): 
@@ -376,6 +398,7 @@ for l in range(0, numtsteps + 1):
  
     d_vector.fill(0.) 
     d_vector[-1] += constraint(y1, ntau)  # last entry
+
     # Evalute grad e at y1  
     phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y1, 4)
     fill_grad_e(phi_up, phi_dwn, phistar_up, phistar_dwn, grad_e); # filling gradE at y_l+1 
@@ -396,8 +419,8 @@ for l in range(0, numtsteps + 1):
 
     G_matrix[-1,-1] = 0. 
 
-    if l == 1:
-      print(G_matrix)
+ #    if l == 1:
+ #      print(G_matrix)
 
     d_vector[0:4*ntau] += y1 
     

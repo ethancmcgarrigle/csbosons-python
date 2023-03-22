@@ -279,7 +279,7 @@ def EM(phi, phistar, dSdphistar, dSdphi, _isOffDiagonal, _CLnoise, dV, dt):
 ensemble = 'CANONICAL'
 _mu = -1.0
 _g = 0.00    # ideal gas if == 0 
-ntau = 20
+ntau = 16
 dim = 3
 Nx = 4
 L = 50  # simulation box size 
@@ -301,7 +301,8 @@ beta = 1.0
 lambda_psi = 0.005
 _lambda = 6.0505834240
 
-dt = 0.005
+#dt = 0.005
+dt = 0.01
 # Load the inputs
 
 # inputs for gradient descent
@@ -309,8 +310,8 @@ dt = 0.005
  #  inputs = yaml.load(infile, Loader=yaml.FullLoader)
 
 
-numtsteps = 100000
-iofreq = 1000    # print every 1000 steps 
+numtsteps = 10000
+iofreq = 500    # print every 1000 steps 
 #iofreq = 100 #  print every 1000 steps 
 
 num_points = math.floor(numtsteps/iofreq)
@@ -394,9 +395,15 @@ nonlinforce = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 
 
 # Set up the spatial/k-grids
+assert(Nx > 3)
+n_grid = np.append( np.arange(0, Nx/2 + 1, 1) , np.arange(-Nx/2 + 1, 0, 1) ) # artifical +1 required for 2nd argument 
+dk = np.pi * 2 / L
+
 x_grid = np.arange(0., L, L/Nx) 
-kx_grid = np.linspace((-Nx/2 +1)*2.*np.pi/L , (Nx/2.)*2.*np.pi/L, Nx) 
-kx_grid = np.sort(kx_grid) # optional sorting step 
+kx_grid = n_grid * dk
+assert(len(x_grid) == len(kx_grid))
+#kx_grid = np.linspace((-Nx/2 + 1)*2.*np.pi/L , (Nx/2.)*2.*np.pi/L, Nx) 
+#kx_grid = np.sort(kx_grid) # optional sorting step 
 #kx_grid = np.linspace((-Nx/2 +1)*np.pi/L , (Nx/2.)*np.pi/L, Nx) 
 if(dim > 1):
   if(dim > 2):
@@ -406,13 +413,16 @@ if(dim > 1):
   ky_grid = kx_grid 
 
 
+# these are not synced up with k-grid 
 X,Y,Z = np.meshgrid(x_grid, y_grid, z_grid)
 
 _k2_grid = np.zeros(Nx**dim)
+_k2_grid_v2 = np.zeros(Nx**dim)
 KX, KY, KZ = np.meshgrid(kx_grid, ky_grid, kz_grid) 
 # Fill k2-grid 
 # Attempt 0: flatten
-_k2_grid += (KX*KX + KY*KY + KZ*KZ).flatten()
+#_k2_grid += (KX*KX + KY*KY + KZ*KZ).flatten()
+_k2_grid_v2 += (KX*KX + KY*KY + KZ*KZ).flatten()
 
 # attempt 1 -- for loops 
  #for x in range(0, Nx): 
@@ -420,10 +430,13 @@ _k2_grid += (KX*KX + KY*KY + KZ*KZ).flatten()
 
 # attempt 2 - load in grid from csbosonscpp
 k2data = np.loadtxt('k2map.dat', unpack=True)
-_k2_grid = k2data[6] # 7th column is k^2 data  
+_k2_grid += _k2_grid_v2
+#_k2_grid = k2data[6] # 7th column is k^2 data  
 
 print(_k2_grid)
 # Sampling vectors   
+
+
 
 t_s = np.zeros(num_points + 1)
 N_tot_s = np.zeros(num_points + 1, dtype=np.complex_)

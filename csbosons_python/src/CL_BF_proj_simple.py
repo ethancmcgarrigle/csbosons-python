@@ -24,7 +24,8 @@ import matplotlib.pyplot as plt
 # Refresh linear force coefficient
 def A_nk(n, _ntau, _beta, k2_grid, _lambda, _ensemble, _mu):
         # Returns a d-dimensional field, evaluated at timeslice "n" 
-        A = np.zeros(len(k2_grid), dtype=np.complex_) # spatial resolution  
+        #A = np.zeros(len(k2_grid), dtype=np.complex_) # spatial resolution  
+        A = 0. 
         dtau = _beta/_ntau
         A += (- dtau * _lambda * k2_grid) # hbar^2/2m k^2, kinetic energy 
         if(_ensemble == "GRAND"):
@@ -71,13 +72,11 @@ def fill_grad_e(phi, phistar,  grad_e):
   for itau in range(0, ntau):
     # PBC 
     itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
-    L[:, itau] += phi[:, itaum1]  # de/dphi
-    Lstar[:, itaum1] += phistar[:, itau] #\delta e / \delta phi^*
+    L[:, itau] += phi[:, itaum1]
+    Lstar[:, itaum1] += phistar[:, itau]
   
   grad_e.fill(0.)
-  #grad_e += np.hstack([Lstar[0, :], L[0, :]])
-  #grad_e += np.hstack([L[0, :], Lstar[0, :]])
-  grad_e += np.hstack([L, Lstar])
+  grad_e += np.hstack([Lstar[0, :], L[0, :]])
   grad_e *= 1./float(ntau)
 
 
@@ -203,7 +202,7 @@ _mu = -1.0
 _g = 0.000   # ideal gas if == 0 
 ntau = 16
 dim = 3
-Nx = 4
+Nx = 1
 L = 50  # simulation box size 
 Vol = L**dim
 _numspecies = 1
@@ -225,7 +224,7 @@ beta = 0.5
 lambda_psi = 0.001
 _lambda = 6.0505834240
 
-dt = 0.008
+dt = 0.005
 # Load the inputs
 
 # inputs for gradient descent
@@ -321,37 +320,38 @@ noisescl = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 nonlinforce = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 
 
-#_k2_grid = 0.0
 # Set up the spatial/k-grids
-assert(Nx > 3)
-n_grid = np.append( np.arange(0, Nx/2 + 1, 1) , np.arange(-Nx/2 + 1, 0, 1) ) # artifical +1 required for 2nd argument 
-dk = np.pi * 2 / L
-
-x_grid = np.arange(0., L, L/Nx) 
-kx_grid = n_grid * dk
-assert(len(x_grid) == len(kx_grid))
-#kx_grid = np.linspace((-Nx/2 + 1)*2.*np.pi/L , (Nx/2.)*2.*np.pi/L, Nx) 
-#kx_grid = np.sort(kx_grid) # optional sorting step 
-#kx_grid = np.linspace((-Nx/2 +1)*np.pi/L , (Nx/2.)*np.pi/L, Nx) 
-if(dim > 1):
-  if(dim > 2):
-    z_grid = x_grid 
-    kz_grid = kx_grid 
-  y_grid = x_grid # assumes cubic mesh  
-  ky_grid = kx_grid 
-
-
-# these are not synced up with k-grid 
-X,Y,Z = np.meshgrid(x_grid, y_grid, z_grid)
-
-_k2_grid = np.zeros(Nx**dim)
-KX, KY, KZ = np.meshgrid(kx_grid, ky_grid, kz_grid) 
-# Fill k2-grid 
-# Attempt 0: flatten
-#_k2_grid += (KX*KX + KY*KY + KZ*KZ).flatten()
-_k2_grid += (KX*KX + KY*KY + KZ*KZ).flatten()
+#x_grid = np.arange(0., L, L/Nx) 
+ #kx_grid = np.linspace((-Nx/2 +1)*2.*np.pi/L , (Nx/2.)*2.*np.pi/L, Nx) 
+ #kx_grid = np.sort(kx_grid) # optional sorting step 
+ ##kx_grid = np.linspace((-Nx/2 +1)*np.pi/L , (Nx/2.)*np.pi/L, Nx) 
+ #if(dim > 1):
+ #  if(dim > 2):
+ #    z_grid = x_grid 
+ #    kz_grid = kx_grid 
+ #  y_grid = x_grid # assumes cubic mesh  
+ #  ky_grid = kx_grid 
+ #
+ #
+ #X,Y,Z = np.meshgrid(x_grid, y_grid, z_grid)
+ #
+ #_k2_grid = np.zeros(Nx**dim)
+ #KX, KY, KZ = np.meshgrid(kx_grid, ky_grid, kz_grid) 
+ ## Fill k2-grid 
+ ## Attempt 0: flatten
+ #_k2_grid += (KX*KX + KY*KY + KZ*KZ).flatten()
+ #
+ ## attempt 1 -- for loops 
+ # #for x in range(0, Nx): 
+ # #  _k2_grid += np.sum(KX*KX)
+ #
+ ## attempt 2 - load in grid from csbosonscpp
+ #k2data = np.loadtxt('k2map.dat', unpack=True)
+ #_k2_grid = k2data[6] # 7th column is k^2 data  
+_k2_grid = 0.0
 
 print(_k2_grid)
+# Sampling vectors   
 
 
 t_s = np.zeros(num_points + 1)
@@ -494,8 +494,9 @@ for l in range(0, numtsteps + 1):
     fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, ensemble, _g, beta)
     phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, nonlincoef, noise, noisestar) 
 
-  print('residual pre iteration:', str(constraint_err(N_input, phi, phistar)))
+  #print('residual pre iteration:', str(constraint_err(N_input, phi, phistar)))
   y_iter += np.hstack([phi[0], phistar[0]]) 
+
   #print('printing y_iter')
   #print(y_iter)
   #y_iter -= mobility * dt * Forces # EM 

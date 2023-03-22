@@ -377,7 +377,11 @@ for l in range(0, numtsteps + 1):
     # unpack y_vector  
     # Unpack to do operator calculations and block averaging 
     #if(j == 0): 
-    phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_vector, 4) # use the original phi,phi* for gradE
+    #phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_vector, 4) # use the original phi,phi* for gradE
+    phi_up = np.split(y_vector, 4)[0] 
+    phistar_up = np.split(y_vector, 4)[1] 
+    phi_dwn = np.split(y_vector, 4)[2] 
+    phistar_dwn = np.split(y_vector, 4)[3] 
  #    else: 
  #      phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_iter, 4)  # use the current iteration 
 
@@ -385,9 +389,14 @@ for l in range(0, numtsteps + 1):
     y_tilde += grad_e * psi_iter  # current psi iteration 
    
     # Do Euler maruyama on y_tilde
-    phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_tilde, 4)
+    #phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_tilde, 4)
+    phi_up = np.split(y_tilde, 4)[0] 
+    phistar_up = np.split(y_tilde, 4)[1] 
+    phi_dwn = np.split(y_tilde, 4)[2] 
+    phistar_dwn = np.split(y_tilde, 4)[3] 
     fill_forces(phi_up, phi_dwn, phistar_up, phistar_dwn, dSdphistar_up, dSdphistar_dwn, dSdphi_up, dSdphi_dwn, ntau, 0., gamma_shift, _U, _hz, beta)
-    Forces = np.hstack([dSdphistar_up, dSdphi_up, dSdphistar_dwn, dSdphi_dwn]) 
+    Forces.fill(0.)
+    Forces += np.hstack([dSdphistar_up, dSdphi_up, dSdphistar_dwn, dSdphi_dwn]) 
     y_EM = y_tilde - mobility * dt * Forces  + all_noises 
     
     
@@ -400,7 +409,11 @@ for l in range(0, numtsteps + 1):
     d_vector[-1] += constraint(y1, ntau)  # last entry
 
     # Evalute grad e at y1  
-    phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y1, 4)
+    #phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y1, 4)
+    phi_up = np.split(y1, 4)[0] 
+    phistar_up = np.split(y1, 4)[1] 
+    phi_dwn = np.split(y1, 4)[2] 
+    phistar_dwn = np.split(y1, 4)[3] 
     fill_grad_e(phi_up, phi_dwn, phistar_up, phistar_dwn, grad_e); # filling gradE at y_l+1 
 
     y1 -= (grad_e * psi_iter)
@@ -409,7 +422,11 @@ for l in range(0, numtsteps + 1):
 
     # Where is grad_e evaluated? either y_iter or y_1 or y_EM ?  
     # Refill the G matrix 
-    phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_iter, 4)
+    #phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_iter, 4)
+    phi_up = np.split(y_iter, 4)[0] 
+    phistar_up = np.split(y_iter, 4)[1] 
+    phi_dwn = np.split(y_iter, 4)[2] 
+    phistar_dwn = np.split(y_iter, 4)[3] 
     fill_grad_e(phi_up, phi_dwn, phistar_up, phistar_dwn, grad_e);
     for i in range(0, 4*ntau): 
       G_matrix[i,-1] = -2. # final column 
@@ -450,7 +467,11 @@ for l in range(0, numtsteps + 1):
   y_vector += y_iter
  
   # Unpack to do operator calculations and block averaging  
-  phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_vector, 4)
+  #phi_up, phistar_up, phi_dwn, phistar_dwn = np.split(y_vector, 4)
+  phi_up = np.split(y_vector, 4)[0] 
+  phistar_up = np.split(y_vector, 4)[1] 
+  phi_dwn = np.split(y_vector, 4)[2] 
+  phistar_dwn = np.split(y_vector, 4)[3] 
 
   # L and L-star vectors represent the appropriately-tau-shifted CSfields
   # Calculate the scalar inverse of G:

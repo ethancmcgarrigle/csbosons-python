@@ -10,7 +10,7 @@ from scipy.fft import fft
 from scipy.fft import ifft
 import matplotlib 
 import matplotlib.pyplot as plt 
-
+import pdb 
 
 # Python function for executing CL sampling of a bosefluid in the coherent states field theoretic representation 
 
@@ -46,24 +46,26 @@ def fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, _ensemble, _g, _be
     # PBC 
     itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
     # Build force vector 
-    dSdphistar[:, itau] += _g * dtau * phi[:, itaum1] * phi[:, itaum1] * phistar[:, itau]
-    dSdphi[:, itaum1] += _g * dtau * phistar[:, itau] * phi[:, itaum1] * phistar[:, itau]
+    #dSdphistar[:, itau] += _g * dtau * phi[:, itaum1] * phi[:, itaum1] * phistar[:, itau]
+    #dSdphi[:, itaum1] += _g * dtau * phistar[:, itau] * phi[:, itaum1] * phistar[:, itau]
+    dSdphistar[itau, :] += _g * dtau * phi[itaum1, :] * phi[itaum1, :] * phistar[itau, :]
+    dSdphi[itaum1, :] += _g * dtau * phistar[itau, :] * phi[itaum1, :] * phistar[itau, :]
     if(_ensemble == "CANONICAL"):
       # include mu force in nonlinear
       # identify _mu = i psi / \beta
       _mu_eff = 1j * _psi / _beta
       #print('printing the effective chemical potential')
       #print(_mu_eff)
-      dSdphistar[:, itau] += -phi[:, itaum1] * _mu_eff * dtau 
-      dSdphi[:, itaum1] +=  -phistar[:, itau] * _mu_eff * dtau 
+      dSdphistar[itau, :] += -phi[itaum1, :] * _mu_eff * dtau 
+      dSdphi[itaum1, :] +=  -phistar[itau, :] * _mu_eff * dtau 
 
 
 
 
 
 def fill_grad_e(phi, phistar,  grad_e): 
-  L =  np.zeros((Nx**dim, ntau), dtype=np.complex_) 
-  Lstar =  np.zeros((Nx**dim, ntau), dtype=np.complex_) 
+  L =  np.zeros((ntau, Nx**dim), dtype=np.complex_) 
+  Lstar =  np.zeros((ntau, Nx**dim), dtype=np.complex_) 
   L.fill(0.)
   Lstar.fill(0.)
 
@@ -71,24 +73,25 @@ def fill_grad_e(phi, phistar,  grad_e):
   for itau in range(0, ntau):
     # PBC 
     itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
-    L[:, itau] += phi[:, itaum1]  # de/dphi
-    Lstar[:, itaum1] += phistar[:, itau] #\delta e / \delta phi^*
+    L[itau, :] += phi[itaum1, :]  # de/dphi
+    Lstar[itaum1, :] += phistar[itau, :] #\delta e / \delta phi^*
   
   grad_e.fill(0.)
   #grad_e += np.hstack([Lstar[0, :], L[0, :]])
   #grad_e += np.hstack([L[0, :], Lstar[0, :]])
-  grad_e += np.hstack([L, Lstar])
+  grad_e += np.vstack([Lstar, L])
+  #grad_e += np.vstack([L, Lstar])
   grad_e *= 1./float(ntau)
 
 
 
 def constraint_err(_N_input, phi, phistar):
     # Function for calculation the constraint error
-    tmp = np.zeros(len(phi[:,0]), dtype=np.complex_)
-    Ntau = len(phi[0, :]) 
+    tmp = np.zeros(len(phi[0,:]), dtype=np.complex_)
+    Ntau = len(phi[:,0]) 
     for itau in range(0, Ntau):
       itaum1 = ( (int(itau) - 1) % int(Ntau) + int(Ntau)) % int(Ntau)
-      tmp += phistar[:, itau] * phi[:, itaum1]
+      tmp += phistar[itau, :] * phi[itaum1, :]
     tmp *= 1./Ntau
 
     constraint_residual = 0.0 + 1j*0.0
@@ -103,9 +106,37 @@ def integrate_r_intensive(field):
     return result
 
 
+def integrate_tau_intensive(CSfield):
+    # tau averages a CS field --> returns field 
+    N_spatial = len(CSfield[0,:]) 
+    result = np.zeros(N_spatial, dtype=np.complex_)
+    ntau = len(CSfield[:,0])
+
+    # TODO use np vector ops to increase efficiency 
+    for m in range(0, N_spatial): 
+      result[m] += np.sum(CSfield[:, m])/ntau
+
+    return result
+
+
+
+def L2_norm(CSfield, Vol):
+    N_spatial = len(CSfield[0, :])
+    ntau = len(CSfield[:, 0])
+    norm_sq = np.zeros((ntau, N_spatial), dtype=np.complex_) 
+    norm_sq += CSfield * np.conjugate(CSfield)
+    # For L2 norm, we want an extensive sum over tau and an extensive integral 
+    result = integrate_r_intensive(integrate_tau_intensive(norm_sq) * ntau) * Vol
+    return result.real
+
+
+
+
+
+
 def ETD(_phi, _phistar, _dSdphistar, _dSdphi, _lincoef, _nonlincoef, _noise, _noisestar):
     # Performs Exponential time-differncing time stepping, returns updated fields in real space, \tau representation 
-    ntau = len(_phi[0, :])
+    ntau = len(_phi[:, 0])
     _N_spatial = len(_phi)
     # Exponential-Time-Differencing, assumes off-diagonal stepping 
 
@@ -138,14 +169,14 @@ def EM(phi, phistar, EM_force_phi, EM_force_phistar, _isOffDiagonal):
     if(_isOffDiagonal):
       phi -= EM_force_phistar * mobility * dt 
       phistar -= EM_force_phi * mobility * dt 
-      noise = np.random.normal(0, 1., (N_spatial, ntau)) + 1j * np.random.normal(0, 1., (N_spatial, ntau))
+      noise = np.random.normal(0, 1., (ntau, N_spatial)) + 1j * np.random.normal(0, 1., (ntau, N_spatial))
       noisestar = np.conj(noise) 
     else:
       phi -= EM_force_phi * mobility * dt 
       phistar -= EM_force_phistar * mobility * dt
       # For diagonal stepping, generate real noise  
-      noise = np.random.normal(0, 1., (N_spatial, ntau))  
-      noisestar = np.random.normal(0, 1., (N_spatial, ntau)) 
+      noise = np.random.normal(0, 1., (ntau, N_spatial))  
+      noisestar = np.random.normal(0, 1., (ntau, N_spatial)) 
 
     # Add the noise 
     phi += _noise 
@@ -158,37 +189,37 @@ def EM(phi, phistar, EM_force_phi, EM_force_phistar, _isOffDiagonal):
 
 # d+1 Fourier Transforms --- passed test check for normalization  
 def fft_dp1(_CSfield, _dontScale=True):
-    # d+1 Fourier transform of a CS field object -- 2D numpy array \in C^ (Nx**dim , ntau)
-    ntau = len(_CSfield[0,:])
+    # d+1 Fourier transform of a CS field object -- 2D numpy array \in C^ (ntau, Nx**dim) 
+    ntau = len(_CSfield[:,0])
     N_spatial = len(_CSfield)
 
     # Spatial Fourier transform -- column-by-column i.e. each tau slice is FFT'd 
     for j in range(0, ntau):
-      _CSfield[:,j] = fft(_CSfield[:, j])
+      _CSfield[j,:] = fft(_CSfield[j,:])
 
     # Now do the Fourier transform in imaginary time to Matsubara freq.
 
     for m in range(0, N_spatial):
-      _CSfield[m,:] = fft(_CSfield[m, :])
+      _CSfield[:,m] = fft(_CSfield[:, m])
 
     return _CSfield
 
 
 def ifft_dp1(_CSfield):
-    # d+1 Fourier transform of a CS field object -- 2D numpy array \in C^ (Nx**dim , ntau)
-    ntau = len(_CSfield[0,:])
+    # d+1 Fourier transform of a CS field object -- 2D numpy array \in C^ (ntau, Nx**dim) 
+    ntau = len(_CSfield[:,0])
     N_spatial = len(_CSfield)
 
     # Spatial Fourier transform -- column-by-column i.e. each tau slice is FFT'd 
     for j in range(0, ntau):
       #_CSfield[:,j] = ifft(_CSfield[:, j]) * N_spatial
-      _CSfield[:,j] = ifft(_CSfield[:, j]) 
+      _CSfield[j,:] = ifft(_CSfield[j,:]) 
  
     # Now do the Fourier transform in imaginary time to Matsubara freq.
 
     for m in range(0, N_spatial):
       #_CSfield[m,:] = ifft(_CSfield[m, :]) * ntau
-      _CSfield[m,:] = ifft(_CSfield[m, :])
+      _CSfield[:,m] = ifft(_CSfield[:,m])
 
     return _CSfield
 
@@ -216,7 +247,7 @@ N_spatial = Nx**dim
 dV = Vol/N_spatial
 
 #IC = np.ones((N_spatial, ntau), dtype=np.complex_) * (1/(np.sqrt(2)) + 1j*0) 
-IC = np.zeros((N_spatial, ntau), dtype=np.complex_) 
+IC = np.zeros((ntau, N_spatial), dtype=np.complex_) 
 
 # Need IC to be on the manifold 
 IC += np.sqrt((N_input/ Vol))
@@ -242,7 +273,7 @@ num_points = math.floor(numtsteps/iofreq)
 
 # initialize psi at saddle pt
 isPsizero = False 
-_psi = 0. + 1j * (_mu) 
+_psi = 0. - 1j * (_mu) 
 
 # initial value 
 _lagrange_multiplier = 0.00
@@ -291,10 +322,10 @@ print(' Using Noise? ' + str(_CLnoise))
 print()
 # initialize CS fields at zero
 # d+1 dim fields: use 2D np arrays: (Nx **d) x Ntau 
-phi = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-phistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-dSdphi = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-dSdphistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+phi = np.zeros((ntau, Nx**dim), dtype=np.complex_)
+phistar = np.zeros((ntau, Nx**dim), dtype=np.complex_)
+dSdphi = np.zeros((ntau, Nx**dim), dtype=np.complex_)
+dSdphistar = np.zeros((ntau, Nx**dim), dtype=np.complex_)
 
 
 
@@ -311,14 +342,14 @@ dtau = beta/ntau
 
 
 # Noise fields 
-noise = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-noisestar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+noise = np.zeros((ntau, Nx**dim), dtype=np.complex_)
+noisestar = np.zeros((ntau, Nx**dim), dtype=np.complex_)
 
 # Compute the linear and non-linear coefficients once since they are complex scalars and not a function of the configuration for a single spin in this model 
-lincoef = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-nonlincoef = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-noisescl = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-nonlinforce = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+lincoef = np.zeros((ntau, Nx**dim), dtype=np.complex_)
+nonlincoef = np.zeros((ntau, Nx**dim), dtype=np.complex_)
+noisescl = np.zeros((ntau, Nx**dim), dtype=np.complex_)
+nonlinforce = np.zeros((ntau, Nx**dim), dtype=np.complex_)
 
 
 #_k2_grid = 0.0
@@ -368,10 +399,11 @@ rho = np.zeros(Nx**dim, dtype=np.complex_)
 N_tot = 0. 
 for itau in range(0, int(ntau)):
   itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
-  rho += phistar[:, itau] * phi[:, itaum1]
+  rho += phistar[itau, :] * phi[itaum1, :] / ntau
   
 # scale by ntau
-N = integrate_r_intensive(rho/ntau) * Vol
+N = integrate_r_intensive(rho) * Vol 
+N_tot += N
 
 N2 = N**2 
 
@@ -384,17 +416,17 @@ t = 0.
 
 # Prefill the linear coefficients 
 for j in range(0, ntau):
-  lincoef[:, j] = A_nk(j, ntau, beta, _k2_grid, _lambda, ensemble, _mu)
+  lincoef[j, :] = A_nk(j, ntau, beta, _k2_grid, _lambda, ensemble, _mu)
   # Correct diverging terms by using Euler limit of ETD
   # Python's FFT accounts for scaling, i.e. ifft(fft(a) == a , therefore, take out the scaling factors  
   for m in range(0, N_spatial): 
-    if(lincoef[m, j] == 0.):
-      nonlincoef[m, j] = -1. * ntau * dt 
-      noisescl[m, j] = np.sqrt(ntau * dt / dV)
+    if(lincoef[j, m] == 0.):
+      nonlincoef[j, m] = -1. * ntau * dt 
+      noisescl[j, m] = np.sqrt(ntau * dt / dV)
     else: 
-      nonlincoef[m, j] = (np.exp(-lincoef[m,j] * ntau * dt) - 1.)/lincoef[m, j]
-      noisescl[m, j] = np.sqrt((1. - np.exp(-2. * lincoef[m, j] * ntau * dt))/(2. * lincoef[m, j] * dV))
-  lincoef[:, j] = np.exp(- lincoef[:, j] * ntau * dt)
+      nonlincoef[j, m] = (np.exp(-lincoef[j,m] * ntau * dt) - 1.)/lincoef[j, m]
+      noisescl[j, m] = np.sqrt((1. - np.exp(-2. * lincoef[j, m] * ntau * dt))/(2. * lincoef[j, m] * dV))
+  lincoef[j, :] = np.exp(- lincoef[j, :] * ntau * dt)
 
 
 N_tot_avg = 0. + 1j*0 
@@ -408,14 +440,14 @@ num_iters_s = np.zeros(num_points + 1)
 num_iters_s[0] = 0
 
 # Initialize Matrices  
-num_DOF = 2 * ntau
+num_DOF = 2 
 I = np.identity(num_DOF, dtype=np.complex_)  # 1 species  
 state_vector = np.zeros(num_DOF, dtype=np.complex_)
 
 G_matrix = np.zeros(((num_DOF) + 1, (num_DOF)+ 1), dtype=np.complex_)  # 2ntau DOF + 1 constraint DOF for single species Bosefluid  
 d_vector = np.zeros(num_DOF + _numspecies, dtype=np.complex_) 
 
-y_iter = np.zeros(num_DOF, dtype=np.complex_) 
+y_iter = np.zeros((2*ntau, Nx**dim), dtype=np.complex_) 
 
 
 # Fill G_matrix identity part
@@ -424,16 +456,17 @@ for i in range(0, num_DOF):
 
 
 # grad e
-grad_e = np.zeros(len(y_iter), dtype=np.complex_)
-y_tilde = np.zeros(len(y_iter), dtype=np.complex_) 
-y_ETD = np.zeros(len(y_iter), dtype=np.complex_) 
-y_vector = np.zeros(len(y_iter), dtype=np.complex_) 
-y1 = np.zeros(len(y_iter), dtype=np.complex_)
-all_noises= np.zeros(2*ntau, dtype=np.complex_)
+#grad_e = np.zeros(len(y_iter), dtype=np.complex_)
+grad_e = np.zeros((2 * ntau, Nx**dim), dtype=np.complex_)
+y_tilde = np.zeros((2*ntau, Nx**dim), dtype=np.complex_) 
+y_ETD = np.zeros((2*ntau, Nx**dim), dtype=np.complex_) 
+y_vector = np.zeros((2*ntau, Nx**dim), dtype=np.complex_) 
+y1 = np.zeros((2*ntau, Nx**dim), dtype=np.complex_)
+all_noises= np.zeros((2*ntau, Nx**dim), dtype=np.complex_)
 
 
 # Initialize y_vector with the CS fields 
-y_vector += np.hstack([phi[0], phistar[0]])
+y_vector += np.vstack([phi, phistar])
 max_iterations = 10
 ETOL = 1E-2
 num_iters_avg = 1
@@ -442,13 +475,14 @@ _isProjection = True
 
 start = time.time()
 
+print('residual pre loop :', str(constraint_err(N_input, phi, phistar)))
 _psi = 0 + 1j*0
 _psi += _lagrange_multiplier
 # Timestep using ETD 
 for l in range(0, numtsteps + 1):
 #for l in range(0, 2):
   if(_isProjection):
-    fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, -0.1j, ensemble, _g, beta)
+    fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, -1.0j, ensemble, _g, beta)
     fill_grad_e(phi, phistar, grad_e)
   #Forces.fill(0.)
   #Forces += np.hstack([dSdphi, dSdphistar]) # Diagonal relaxation 
@@ -465,7 +499,7 @@ for l in range(0, numtsteps + 1):
   # Generate Noise terms for the whole time step 
   noise.fill(0.) 
   noisestar.fill(0.) 
-  noise = np.random.normal(0, 1., (N_spatial, ntau)) + 1j * np.random.normal(0, 1., (N_spatial, ntau))
+  noise = np.random.normal(0, 1., (ntau, N_spatial)) + 1j * np.random.normal(0, 1., (ntau, N_spatial))
   noisestar = np.conj(noise) 
   
   # FFT and Scale by fourier coeff 
@@ -477,7 +511,6 @@ for l in range(0, numtsteps + 1):
   #all_noises += np.hstack([noise[0], noisestar[0]]) 
   #all_noises *= np.sqrt(2. * mobility * dt)
 
-
   # Set up Newton's iteration
   # Use previous psi as initial iterate guess for psi  
   psi_iter = 0. + 1j * 0.
@@ -488,14 +521,14 @@ for l in range(0, numtsteps + 1):
 
   # Intial iteration guess -- an EM step
   # Try ETD step, no noise 
-  if(_isProjection):
-    phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, nonlincoef, np.zeros(ntau, dtype=np.complex_), np.zeros(ntau, dtype=np.complex_))
-  else:
-    fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, ensemble, _g, beta)
-    phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, nonlincoef, noise, noisestar) 
+ #  if(_isProjection):
+ #    phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, nonlincoef, np.zeros((ntau, N_spatial), dtype=np.complex_), np.zeros((ntau, N_spatial), dtype=np.complex_))
+ #  else:
+ #    fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, ensemble, _g, beta)
+ #    phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, nonlincoef, noise, noisestar) 
 
   print('residual pre iteration:', str(constraint_err(N_input, phi, phistar)))
-  y_iter += np.hstack([phi[0], phistar[0]]) 
+  y_iter += np.vstack([phi, phistar]) 
   #print('printing y_iter')
   #print(y_iter)
   #y_iter -= mobility * dt * Forces # EM 
@@ -508,17 +541,20 @@ for l in range(0, numtsteps + 1):
   
       phi.fill(0.) 
       phistar.fill(0.) 
-      phi[0], phistar[0] = np.split(y_vector, 2) # use the original phi,phi* for gradE
+      phi += np.split(y_vector, 2)[0] # use the original phi,phi* for gradE
+      phistar += np.split(y_vector, 2)[1] # use the original phi,phi* for gradE
   
       fill_grad_e(phi, phistar, grad_e)
       #print('psi iter: ', psi_iter)
-      y_tilde += grad_e * psi_iter 
-      #y_tilde += grad_e * psi_iter * -1j   # current psi iteration 
-     
+      #y_tilde += grad_e * psi_iter 
+      y_tilde += grad_e * psi_iter   # current psi iteration 
+      #pdb.set_trace()
+
       # Do Euler maruyama / ETD on y_tilde
       phi.fill(0.) 
       phistar.fill(0.) 
-      phi[0], phistar[0] = np.split(y_tilde, 2)
+      phi = np.split(y_tilde, 2)[0]
+      phistar = np.split(y_tilde, 2)[1]
       fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, 0., ensemble, _g, beta)
       #Forces = np.hstack([dSdphistar, dSdphi]) 
       #y_EM = y_tilde - mobility * dt * Forces  + all_noises
@@ -526,11 +562,11 @@ for l in range(0, numtsteps + 1):
       if(_CLnoise):
         phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, nonlincoef, noise, noisestar)
       else:
-        phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, nonlincoef, np.zeros(ntau, dtype=np.complex_), np.zeros(ntau, dtype=np.complex_))
+        phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, nonlincoef, np.zeros((ntau, N_spatial), dtype=np.complex_), np.zeros((ntau, N_spatial), dtype=np.complex_))
   
       #print(phi) 
       y_ETD.fill(0.)
-      y_ETD += np.hstack([phi[0], phistar[0]])
+      y_ETD += np.vstack([phi, phistar])
       
       # reset size of y1 vector 
       # fill it with the next iteration  
@@ -542,7 +578,9 @@ for l in range(0, numtsteps + 1):
       # Evalute grad e at y1  
       phi.fill(0.) 
       phistar.fill(0.) 
-      phi[0], phistar[0] = np.split(y1, 2)
+      #phi, phistar = np.split(y1, 2)
+      phi += np.split(y1, 2)[0]
+      phistar += np.split(y1, 2)[1]
       fill_grad_e(phi, phistar, grad_e); # filling gradE at y_l+1 
   
       #print(grad_e)
@@ -550,48 +588,81 @@ for l in range(0, numtsteps + 1):
       y1 -= (grad_e * psi_iter)
       # Take EM step 
       y1 -= y_ETD   # residuals 
+
+      # Reduce down to a scalar --> sqrt of L2 norm , int dr \sum(tau) |y1 - y_ETD|^2 
+      # To compute, extract phi and phistar and then use the L2 function
+      #Use as container storage 
+      phi.fill(0.) 
+      phistar.fill(0.) 
+      #phi, phistar = np.split(y1, 2)
+      phi += np.split(y1, 2)[0]
+      phistar += np.split(y1, 2)[1]
+      L2_residuals = np.zeros(2) # 2 CS fields (phi and phistar) 
+      L2_residuals += np.array([L2_norm(phi, Vol), L2_norm(phistar, Vol)]) 
+      #pdb.set_trace()
+      #L2_residuals = np.sum(integrate_r_intensive(y1 * np.conjugate(y1))) * Vol * ntau 
+      L2_residuals = np.sqrt(L2_residuals) 
+
+      # Simple approach: Iterate until L2_residuals are zero and constraint is satisfied 
   
       # Refill the G matrix 
       phi.fill(0.) 
       phistar.fill(0.) 
-      phi[0], phistar[0] = np.split(y_iter, 2)
+      #phi, phistar = np.split(y_iter, 2)
+      phi += np.split(y_iter, 2)[0]
+      phistar += np.split(y_iter, 2)[1]
   
       # fill constraint vector 
       d_vector.fill(0.) 
       d_vector[-1] += constraint_err(N_input, phi, phistar)  # last entry
-      d_vector[0:num_DOF] += y1
+      
+      #d_vector[0:num_DOF] += y1
+      d_vector[0] = L2_residuals[0]
+      d_vector[1] = L2_residuals[1]
+      print('constraint residual in Newtons:', str(d_vector[-1] ))
       d_vector *= -1. # "b" vector to do Ax = b
   
-      phi[0], phistar[0] = np.split(y_iter, 2)
-      fill_grad_e(phi, phistar, grad_e);
+      #phi, phistar = np.split(y_iter, 2) // wrong, this references instead of copies 
+      phi += np.split(y_iter, 2)[0]
+      phistar += np.split(y_iter, 2)[1]
+      fill_grad_e(phi, phistar, grad_e)
+      phi.fill(0.) 
+      phistar.fill(0.)
+      # containers for grad_e for matrix 
+      #phi, phistar = np.split(grad_e, 2) 
+      phi += np.split(grad_e, 2)[0]
+      phistar += np.split(grad_e, 2)[1]
       #print('printing grad e')
       #print(grad_e)
       
-      for i in range(0, num_DOF): 
+      for i in range(0, 2): 
         G_matrix[i,-1] = -2. # final column 
-        G_matrix[i,-1] *= grad_e[i] 
+        #G_matrix[i,-1] *= grad_e
         G_matrix[-1,i] = 1.   # final row 
-        G_matrix[-1,i] *= grad_e[i] 
+        #G_matrix[-1,i] *= grad_e
   
+      G_matrix[0,-1] *= np.sqrt(L2_norm(phi, Vol)) 
+      G_matrix[1,-1] *= np.sqrt(L2_norm(phistar, Vol)) 
+      G_matrix[-1, 0] *= np.sqrt(L2_norm(phi, Vol)) 
+      G_matrix[-1,1] *= np.sqrt(L2_norm(phistar, Vol)) 
       G_matrix[-1,-1] = 0. 
-   #
-   #    if l == 1:
-   #      print('printing G')
-   #      print(G_matrix)
+      phi.fill(0.) 
+      phistar.fill(0.)
+
+      #pdb.set_trace()
+ #
+ #    if l == 1:
+ #      print('printing G')
+ #      print(G_matrix)
   
   
       #print('printing d_vector')
       #print(d_vector)
       
-      # do Ax = b, using G as A and delta as b
+
       solution = np.linalg.solve(G_matrix, d_vector)
-      print('solution: ', solution) 
-  
-      # Update iteration with the solution (updates) 
-      y_iter += solution[0:num_DOF] 
-      psi_iter += solution[-1]
-  
-      #if(np.all(solution < ETOL)):
+      #print('solution: ', solution) 
+      # do Ax = b, using G as A and delta as b
       if(np.abs(d_vector[-1]) < ETOL and np.all(solution < ETOL)):
         num_iters_avg += j+1/iofreq
         num_iters = j + 1
@@ -599,6 +670,22 @@ for l in range(0, numtsteps + 1):
         print('constraint residual: ' + str(d_vector[-1]))
         print('psi value: ' + str(psi_iter))
         break;  
+  
+      # Update iteration with the solution (updates) 
+      #y_iter += solution[0:num_DOF] 
+      #phi, phistar = np.split(y_iter, 2)
+      phi += np.split(y_iter, 2)[0]
+      phistar += np.split(y_iter, 2)[1]
+      psi_iter += solution[-1]
+  
+      #if(np.all(solution < ETOL)):
+ #      if(np.abs(d_vector[-1]) < ETOL and np.all(solution < ETOL)):
+ #        num_iters_avg += j+1/iofreq
+ #        num_iters = j + 1
+ #        print('completed a timestep')
+ #        print('constraint residual: ' + str(d_vector[-1]))
+ #        print('psi value: ' + str(psi_iter))
+ #        break;  
   
   
     if( j == max_iterations):
@@ -615,7 +702,9 @@ for l in range(0, numtsteps + 1):
     # Unpack to do operator calculations and block averaging 
     phi.fill(0.) 
     phistar.fill(0.) 
-    phi[0], phistar[0] = np.split(y_vector, 2)
+    #phi, phistar = np.split(y_vector, 2)
+    phi += np.split(y_vector, 2)[0]
+    phistar += np.split(y_vector, 2)[1]
 
 
 
@@ -629,7 +718,7 @@ for l in range(0, numtsteps + 1):
   rho.fill(0.) 
   for itau in range(0, ntau):
     itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
-    rho += phistar[:, itau] * phi[:, itaum1]
+    rho += phistar[itau, :] * phi[itaum1,:]
   
   rho *= 1./float(ntau)
   N_tot = integrate_r_intensive(rho) * Vol 

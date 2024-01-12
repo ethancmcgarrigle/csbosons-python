@@ -13,16 +13,6 @@ import matplotlib.pyplot as plt
 
 
 # Python function for executing CL sampling of a bosefluid in the coherent states field theoretic representation 
-
-# This will be used to test numerical projection methods 
-
-
-# 1. Confirm GCE implementation -- SUCCESS! Need to get k2_grid correct still 
-
-# 2. Confirm CE implementation -- Success! Robust stability on IG, dubious on (interacting) bosefluid  
-
-# 3. confirm projected implementation -- In progress  
-
 # Helper functions
 
 
@@ -40,13 +30,22 @@ def A_nk(n, _ntau, _beta, k2_grid, _lambda, _ensemble, _mu):
         return A 
 
 
-def fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, _ensemble, _g, _beta):
+def fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, _ensemble, _g, _beta, _coeff_phi, _coeff_phistar):
   # Fills the nonlinear forces as applicable  
   dSdphistar.fill(0.)
   dSdphi.fill(0.)
+  _isShifting = True
+  _coeff_phi.fill(0.) 
+  _coeff_phistar.fill(0.) 
 
   dtau = _beta/ntau
   # Build force vector 
+    # compute avg. rho
+  avg_rho = 1.02 
+ #  for itau in range(0, int(ntau)):
+ #    # PBC 
+ #    itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
+ #    avg_rho += phi[:,itaum1] * phistar[:, itau] / ntau
   for itau in range(0, int(ntau)):
     # PBC 
     itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau)
@@ -58,6 +57,17 @@ def fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, _ensemble, _g, _be
     # nonlinear forces  
     dSdphistar[:, itau] += _g * dtau * phi[:, itaum1] * phi[:, itaum1] * phistar[:, itau]
     dSdphi[:, itaum1] += _g * dtau * phistar[:, itau] * phi[:, itaum1] * phistar[:, itau]
+
+    # compute the coefficient for phi and phistar 
+    if(_isShifting):
+      _coeff_phi[:, itau] = avg_rho * dtau * _g * itau * np.exp(-2. * np.pi * 1j * itau / ntau) # this performs best 
+      #_coeff_phi[:, itau] = avg_rho * dtau * _g * itau * np.exp(-2. * np.pi * 1j * itau / ntau)  + itau * itau # this performs best 
+      #_coeff_phi[:, itau] = avg_rho * dtau * _g * itau * np.exp(-2. * np.pi * 1j * itau / ntau)  
+      #_coeff_phi[:, itau] = (itau) ** 2
+      #_coeff_phi[:, itau] = (itau * np.pi * 2. / _beta) ** 2
+      _coeff_phistar[:, itau] = np.conj(_coeff_phi[:, itau]) 
+      #_coeff_phistar[:, itau] = avg_rho * dtau * _g * np.exp(2. * np.pi * 1j * itau / ntau)
+    
     if(_ensemble == "CANONICAL"):
       # include mu force in nonlinear
       # identify _mu = i psi / \beta
@@ -65,8 +75,39 @@ def fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, _ensemble, _g, _be
       dSdphistar[:, itau] += -phi[:, itaum1] * _mu_eff * dtau 
       dSdphi[:, itaum1] +=  -phistar[:, itau] * _mu_eff * dtau 
 
+  if(_isShifting): 
+    # FFT CS fields and forces 
+    phi = fft_dp1(phi)
+    phistar = fft_dp1(phistar)
+    dSdphistar = fft_dp1(dSdphistar)
+    dSdphi = fft_dp1(dSdphi)
+    _dbg = False
+    #_coeff_phi += dSdphistar / phi
+    #_coeff_phistar += dSdphi / phistar
+    if(_dbg):
+      #elem = 4
+      print()
+ #      print('force')
+ #      print(dSdphi[0,elem])
+ #      print('approx')
+ #      print(_coeff_phi[0,elem] * phi[0,elem])
+ #      print('difference')
+ #      print(dSdphi[0,elem] - (_coeff_phi[0,elem] * phi[0,elem]))
+      print()
+      print(np.max(np.abs(dSdphi[0,:] - (_coeff_phi[0,:] * phi[0,:]))))
 
-
+    dSdphistar -= (_coeff_phi * phi) # must be in matsubara representation
+    dSdphi -= (_coeff_phistar * phistar)
+    # iFFT back; rest of the code expects forces and phi in r, tau space 
+    phi = ifft_dp1(phi)
+    phistar = ifft_dp1(phistar)
+    dSdphistar = ifft_dp1(dSdphistar)
+    dSdphi = ifft_dp1(dSdphi)
+ #    _coeff_phi += dSdphistar / phi
+ #    _coeff_phistar += dSdphi / phistar  
+     # mu = 1.0
+ #    _coeff_phi += 1.0 * dtau 
+ #    _coeff_phistar += 1.0 * dtau
 
 
 def fill_grad_e(phi, phistar,  grad_e): 
@@ -133,46 +174,6 @@ def ifft_dp1(_CSfield):
     return _CSfield
 
 
- #
- #
- ## d-dimensional Fourier Transforms --- passed test check for normalization  
- #def fft_rtok(_CSfield, _dontScale=True):
- #    # d+1 Fourier transform of a CS field object -- 2D numpy array \in C^ (Nx**dim , ntau)
- #    ntau = len(_CSfield[0,:])
- #    N_spatial = len(_CSfield)
- #
- #    # Spatial Fourier transform -- column-by-column i.e. each tau slice is FFT'd 
- #    for j in range(0, ntau):
- #      _CSfield[:,j] = fft(_CSfield[:, j])
- #
- #    # Now do the Fourier transform in imaginary time to Matsubara freq.
- #
- # #    for m in range(0, N_spatial):
- # #      _CSfield[m,:] = fft(_CSfield[m, :])
- #
- #    return _CSfield
- #
- #
- #def ifft_ktor(_CSfield):
- #    # d+1 Fourier transform of a CS field object -- 2D numpy array \in C^ (Nx**dim , ntau)
- #    ntau = len(_CSfield[0,:])
- #    N_spatial = len(_CSfield)
- #
- #    # Spatial Fourier transform -- column-by-column i.e. each tau slice is FFT'd 
- #    for j in range(0, ntau):
- #      #_CSfield[:,j] = ifft(_CSfield[:, j]) * N_spatial
- #      _CSfield[:,j] = ifft(_CSfield[:, j]) 
- # 
- #    # Now do the Fourier transform in imaginary time to Matsubara freq.
- #
- # #    for m in range(0, N_spatial):
- # #      #_CSfield[m,:] = ifft(_CSfield[m, :]) * ntau
- # #      _CSfield[m,:] = ifft(_CSfield[m, :])
- #
- #    return _CSfield
-
-
-
 
 def constraint_err(_N_input, phi, phistar):
     # Function for calculation the constraint error
@@ -190,19 +191,65 @@ def constraint_err(_N_input, phi, phistar):
 
 
 
-def ETD(phi, phistar, _dSdphistar, _dSdphi, _lincoef, _nonlincoef, noisescl, _CLnoise):
+def ETD(phi, phistar, _dSdphistar, _dSdphi, _lincoef, _lincoef_phistar, _nonlincoef, _nonlincoef_phistar, noisescl, noisescl_phistar, _CLnoise):
     ntau = len(phi[0, :])
     N_spatial = len(phi)
     # Exponential-Time-Differencing, assumes off-diagonal stepping 
 
     # Function to step phi and phistar with ETD  
-    phi = fft_dp1(phi) * _lincoef 
-    phistar = fft_dp1(phistar) * np.conj(_lincoef) 
+    phi = fft_dp1(phi) * (_lincoef) 
+    phistar = fft_dp1(phistar) * (_lincoef_phistar) 
 
     # add nonlinear term, off-diagonal relaxation 
     phi += (fft_dp1(_dSdphistar) * _nonlincoef)
-    phistar += (fft_dp1(_dSdphi) * np.conj(_nonlincoef))
+    phistar += (fft_dp1(_dSdphi) * _nonlincoef_phistar)
 
+    # noise
+    _noise = np.zeros((N_spatial, ntau), dtype=np.complex_)
+    _noisestar = np.zeros((N_spatial, ntau), dtype=np.complex_)
+
+    _noise.fill(0.) 
+    _noisestar.fill(0.) 
+
+    if(_CLnoise):
+      # ETD assumes off-diagonal stepping, generate nosie and scale  
+      _noise = np.random.normal(0, 1., (N_spatial, ntau)) + 1j * np.random.normal(0, 1., (N_spatial, ntau))
+      _noisestar = np.conj(noise) 
+      # FFT and Scale by fourier coeff 
+      _noise = fft_dp1(_noise) * noisescl 
+      #noisestar = fft_dp1(noisestar) * np.conj(noisescl) 
+      _noisestar = fft_dp1(_noisestar) * noisescl_phistar 
+
+    # Add the noise 
+    if(_CLnoise): 
+      phi += _noise 
+      phistar += _noisestar 
+
+    # inverse fft  
+    phi = ifft_dp1(phi) 
+    phistar = ifft_dp1(phistar) 
+
+    return [phi, phistar]
+    # Return state vector (packaged phi/phistar vector)
+
+def ETD_implicit(phi, phistar, dSdphistar, dSdphi, lincoef, lincoef_phistar, nonlincoef, nonlincoef_phistar, noisescl, noisescl_phistar, _CLnoise):
+
+    _tolerance = 1E-12
+    max_iters = 100
+    num_iters = 1
+    cost = 0.1
+    ntau = len(phi[0, :])
+    N_spatial = len(phi)
+
+    phi_cp = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+    phistar_cp = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+    tmp = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+    tmp2 = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+
+    phi_cp += phi
+    phistar_cp += phistar
+
+    # Need to generate noise and fix it throughout iterations 
     # noise
     noise = np.zeros((N_spatial, ntau), dtype=np.complex_)
     noisestar = np.zeros((N_spatial, ntau), dtype=np.complex_)
@@ -216,19 +263,69 @@ def ETD(phi, phistar, _dSdphistar, _dSdphi, _lincoef, _nonlincoef, noisescl, _CL
       noisestar = np.conj(noise) 
       # FFT and Scale by fourier coeff 
       noise = fft_dp1(noise) * noisescl 
-      noisestar = fft_dp1(noisestar) * np.conj(noisescl) 
+      #noisestar = fft_dp1(noisestar) * np.conj(noisescl) 
+      noisestar = fft_dp1(noisestar) * noisescl_phistar 
 
+    # do ETD step to start 
+    phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, lincoef_phistar, nonlincoef, nonlincoef_phistar, noisescl, noisescl_phistar, False)
     # Add the noise 
-    if(_CLnoise): 
+    if(_CLnoise):
+      phi = fft_dp1(phi) 
+      phistar = fft_dp1(phistar) 
       phi += noise 
-      phistar += noisestar 
+      phistar += noisestar
+      phi = ifft_dp1(phi) 
+      phistar = ifft_dp1(phistar) 
 
-    # inverse fft  
-    phi = ifft_dp1(phi) 
-    phistar = ifft_dp1(phistar) 
+    while(cost > _tolerance):
+      # Calculate forces with new CS fields 
+      # Update the nonlinear forces before stepping; fill forces clears dSdphistar and dSdphi 
+      fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, ensemble, _g, beta, _coeff_phi, _coeff_phistar)
+
+      tmp.fill(0.)
+      tmp2.fill(0.)
+      tmp += phi
+      tmp2 += phistar
+      # Reset fields to initial state 
+      phi.fill(0.)
+      phistar.fill(0.)
+      phi += phi_cp
+      phistar += phistar_cp
+
+      # step the fields 
+      phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, lincoef_phistar, nonlincoef, nonlincoef_phistar, noisescl, noisescl_phistar, False)
+      # Add the noise 
+      if(_CLnoise):
+        phi = fft_dp1(phi) 
+        phistar = fft_dp1(phistar) 
+        phi += noise 
+        phistar += noisestar 
+        phi = ifft_dp1(phi) 
+        phistar = ifft_dp1(phistar) 
+      # prep for cost 
+      tmp -= phi 
+      tmp2 -= phistar 
+
+      cost = 0.
+      cost = np.max(np.abs(tmp)) + np.max(np.abs(tmp2))
+      num_iters += 1
+
+      print(cost)
+      #print(num_iters)
+      if(cost < _tolerance):
+        break
+
+      if(num_iters > max_iters):
+        print('Warning, we have exceeded the max number of iterations!')
+        break
 
     return [phi, phistar]
     # Return state vector (packaged phi/phistar vector)
+
+
+
+
+
 
 
 
@@ -244,7 +341,8 @@ def EM(phi, phistar, dSdphistar, dSdphi, _isOffDiagonal, _CLnoise, dV, dt):
     noisestar.fill(0.) 
     #mobility = ntau
     mobility = 1. 
-    noisescl_scalar = np.sqrt(mobility * dt / dV)
+    noisescl_scalar = np.sqrt(mobility * dt) 
+    #noisescl_scalar = np.sqrt(mobility * dt / dV)
 
     if(_isOffDiagonal):
       phi -= dSdphistar * mobility * dt 
@@ -278,14 +376,18 @@ def EM(phi, phistar, dSdphistar, dSdphi, _isOffDiagonal, _CLnoise, dV, dt):
 # Parameters
 ensemble = 'GRAND'
 _mu = 1.00
-_g = 5.00    # ideal gas if == 0 
-ntau = 32
-dim = 2
-Nx = 30
-L = 30  # simulation box size 
+_g = 5.0      # ideal gas if == 0 
+ntau = 72
+dim = 1
+Nx = 1
+L = 1  # simulation box size 
+beta = 1.00
 Vol = L**dim
 
-N_input = (_mu / _g * Vol) # particle number input 
+if(_mu < 0):
+  N_input = 25.0 # ideal gas 
+else:
+  N_input = (_mu / _g * Vol) # particle number input 
 
 N_spatial = Nx**dim
 
@@ -297,13 +399,14 @@ if _g == 0:
   IC += np.sqrt(N_input/Vol) 
 else:
   IC += np.sqrt(_mu/_g) # homogeneous initial condition  
+  #IC += np.sqrt(2.37323)
 
-beta = 0.5
+np.random.seed(1)
 lambda_psi = 0.005
 _lambda = 6.0505834240
 
-#dt = 0.005
-dt = 0.01
+dt = 0.001
+#dt = 0.015
 # Load the inputs
 
 # inputs for gradient descent
@@ -311,8 +414,8 @@ dt = 0.01
  #  inputs = yaml.load(infile, Loader=yaml.FullLoader)
 
 
-numtsteps = 5000
-iofreq = 200    # print every 1000 steps 
+numtsteps = 50000
+iofreq = 100   # print every 1000 steps 
 #iofreq = 100 #  print every 1000 steps 
 
 num_points = math.floor(numtsteps/iofreq)
@@ -371,6 +474,8 @@ phistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 dSdphi = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 dSdphistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 
+_coeff_phi = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+_coeff_phistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 # Fill with initial condition 
 phi += IC
 phistar += IC
@@ -390,14 +495,20 @@ noisestar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 
 # Compute the linear and non-linear coefficients once since they are complex scalars and not a function of the configuration for a single spin in this model 
 lincoef = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+lincoef_phistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 nonlincoef = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+nonlincoef_phistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 noisescl = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+noisescl_phistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 nonlinforce = np.zeros((Nx**dim, ntau), dtype=np.complex_)
 
 
 # Set up the spatial/k-grids
-assert(Nx > 3)
-n_grid = np.append( np.arange(0, Nx/2 + 1, 1) , np.arange(-Nx/2 + 1, 0, 1) ) # artifical +1 required for 2nd argument 
+#assert(Nx > 3)
+if( Nx > 3):
+  n_grid = np.append( np.arange(0, Nx/2 + 1, 1) , np.arange(-Nx/2 + 1, 0, 1) ) # artifical +1 required for 2nd argument 
+elif( Nx == 1):
+  n_grid = np.array([0]) 
 dk = np.pi * 2 / L
 
 x_grid = np.arange(0., L, L/Nx) 
@@ -486,16 +597,26 @@ t = 0.
 # Prefill the linear coefficients 
 for j in range(0, ntau):
   lincoef[:, j] = A_nk(j, ntau, beta, _k2_grid, _lambda, ensemble, _mu)
+  lincoef_phistar[:, j] = np.conj(A_nk(j, ntau, beta, _k2_grid, _lambda, ensemble, _mu))
   # Correct diverging terms by using Euler limit of ETD
   # Python's FFT accounts for scaling, i.e. ifft(fft(a) == a , therefore, take out the scaling factors  
   for m in range(0, N_spatial): 
     if(lincoef[m, j] == 0.):
       nonlincoef[m, j] = -1. * ntau * dt 
-      noisescl[m, j] = np.sqrt(ntau * dt / dV)
+      nonlincoef_phistar[m, j] = -1. * ntau * dt 
+      noisescl[m, j] = np.sqrt(ntau * dt)
+      noisescl_phistar[m, j] = np.sqrt(ntau * dt)
+      #noisescl[m, j] = np.sqrt(ntau * dt / dV)
+      #noisescl_phistar[m, j] = np.sqrt(ntau * dt / dV)
     else: 
       nonlincoef[m, j] = (np.exp(-lincoef[m,j] * ntau * dt) - 1.)/lincoef[m, j]
-      noisescl[m, j] = np.sqrt((1. - np.exp(-2. * lincoef[m, j] * ntau * dt))/(2. * lincoef[m, j] * dV))
+      nonlincoef_phistar[m, j] = (np.exp(-lincoef_phistar[m,j] * ntau * dt) - 1.)/lincoef_phistar[m, j]
+      noisescl[m, j] = np.sqrt((1. - np.exp(-2. * lincoef[m, j] * ntau * dt))/(2. * lincoef[m, j]))
+      noisescl_phistar[m, j] = np.sqrt((1. - np.exp(-2. * lincoef_phistar[m, j] * ntau * dt))/(2. * lincoef_phistar[m, j]))
+      #noisescl[m, j] = np.sqrt((1. - np.exp(-2. * lincoef[m, j] * ntau * dt))/(2. * lincoef[m, j] * dV))
+      #noisescl_phistar[m, j] = np.sqrt((1. - np.exp(-2. * lincoef_phistar[m, j] * ntau * dt))/(2. * lincoef_phistar[m, j] * dV))
   lincoef[:, j] = np.exp(- lincoef[:, j] * ntau * dt)
+  lincoef_phistar[:, j] = np.exp(- lincoef_phistar[:, j] * ntau * dt)
 
 
 N_tot_avg = 0. + 1j*0 
@@ -507,6 +628,7 @@ ctr = 1
 
 _isOffDiagonal = True
 _ETD = True
+_do_implicit = True
 
 start = time.time()
 
@@ -527,7 +649,31 @@ if(not _ETD):
 for l in range(0, numtsteps + 1):
 
   # Update the nonlinear forces before stepping; fill forces clears dSdphistar and dSdphi 
-  fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, ensemble, _g, beta)
+  fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, ensemble, _g, beta, _coeff_phi, _coeff_phistar)
+  # Refill the linear coefficients, accounting for the shift via the nonlinear, linearized portion  
+  for j in range(0, ntau):
+    #print(_coeff_phi[:,j])
+    lincoef[:, j] = A_nk(j, ntau, beta, _k2_grid, _lambda, ensemble, _mu) + _coeff_phi[:, j]
+    lincoef_phistar[:, j] = np.conj(A_nk(j, ntau, beta, _k2_grid, _lambda, ensemble, _mu)) + _coeff_phistar[:, j]
+    # Correct diverging terms by using Euler limit of ETD
+    # Python's FFT accounts for scaling, i.e. ifft(fft(a) == a , therefore, take out the scaling factors  
+    for m in range(0, N_spatial): 
+      if(lincoef[m, j] == 0.):
+        nonlincoef[m, j] = -1. * ntau * dt 
+        nonlincoef_phistar[m, j] = -1. * ntau * dt 
+        noisescl[m, j] = np.sqrt(ntau * dt)
+        noisescl_phistar[m, j] = np.sqrt(ntau * dt)
+        #noisescl[m, j] = np.sqrt(ntau * dt / dV)
+        #noisescl_phistar[m, j] = np.sqrt(ntau * dt / dV)
+      else: 
+        nonlincoef[m, j] = (np.exp(-lincoef[m,j] * ntau * dt) - 1.)/lincoef[m, j]
+        nonlincoef_phistar[m, j] = (np.exp(-lincoef_phistar[m,j] * ntau * dt) - 1.)/lincoef_phistar[m, j]
+        noisescl[m, j] = np.sqrt((1. - np.exp(-2. * lincoef[m, j] * ntau * dt))/(2. * lincoef[m, j]))
+        noisescl_phistar[m, j] = np.sqrt((1. - np.exp(-2. * lincoef_phistar[m, j] * ntau * dt))/(2. * lincoef_phistar[m, j]))
+        #noisescl[m, j] = np.sqrt((1. - np.exp(-2. * lincoef[m, j] * ntau * dt))/(2. * lincoef[m, j] * dV))
+        #noisescl_phistar[m, j] = np.sqrt((1. - np.exp(-2. * lincoef_phistar[m, j] * ntau * dt))/(2. * lincoef_phistar[m, j] * dV))
+    lincoef[:, j] = np.exp(- lincoef[:, j] * ntau * dt)
+    lincoef_phistar[:, j] = np.exp(- lincoef_phistar[:, j] * ntau * dt)
 
   # For ETD, can proceed; for EM, must add linear force contributions to the conatiners  
   if(not _ETD):
@@ -536,7 +682,8 @@ for l in range(0, numtsteps + 1):
     dSdphi = fft_dp1(dSdphi) 
     # Add linearized contributions 
     dSdphistar += tmp * fft_dp1(phi)
-    dSdphi += np.conj(tmp) * fft_dp1(phistar)
+    #dSdphi += np.conj(tmp) * fft_dp1(phistar)
+    dSdphi += tmpstar * fft_dp1(phistar)
 
     # need to iFFT phi and phistar
     phi = ifft_dp1(phi) 
@@ -548,8 +695,11 @@ for l in range(0, numtsteps + 1):
 
     # Do EM step 
     phi, phistar = EM(phi, phistar, dSdphistar, dSdphi, _isOffDiagonal, _CLnoise, dV, dt)
-  else:   
-    phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, nonlincoef, noisescl, _CLnoise)
+  else:  
+    if(_do_implicit): 
+      phi, phistar = ETD_implicit(phi, phistar, dSdphistar, dSdphi, lincoef, lincoef_phistar, nonlincoef, nonlincoef_phistar, noisescl, noisescl_phistar, _CLnoise)
+    else: 
+      phi, phistar = ETD(phi, phistar, dSdphistar, dSdphi, lincoef, lincoef_phistar, nonlincoef, nonlincoef_phistar, noisescl, noisescl_phistar, _CLnoise)
 
 
   # ---- Calculate and Update Observables ------- 
@@ -620,9 +770,9 @@ print('Simulation finished: Runtime = ' + str(end - start) + ' seconds')
 # Print the results (noise long-time averages)
 print()
 print()
-print('The Boson Particle Number is: ' + str(np.mean(N_tot_s[10:].real)))
+print('The Boson Particle Number is: ' + str(np.mean(N_tot_s[4:].real)))
 print()
-print('The Particle Number squared is: ' + str(np.mean(N2_s[10:].real)))
+print('The Particle Number squared is: ' + str(np.mean(N2_s[4:].real)))
 print()
 print('The density is: ' + str(np.mean(N_tot_s[10:].real)/Vol))
 print()

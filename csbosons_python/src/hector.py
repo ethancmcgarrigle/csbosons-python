@@ -61,6 +61,7 @@ def fill_forces(phi, phistar, dSdphistar, dSdphi, ntau, _psi, _ensemble, _g, _be
     # compute the coefficient for phi and phistar 
     if(_isShifting):
       _coeff_phi[:, itau] = avg_rho * dtau * _g * itau * np.exp(-2. * np.pi * 1j * itau / ntau) # this performs best 
+      _coeff_phi[:, itau] = avg_rho * dtau * _g * np.exp(-2. * np.pi * 1j * itau / ntau)   # this performs best 
       #_coeff_phi[:, itau] = avg_rho * dtau * _g * itau * np.exp(-2. * np.pi * 1j * itau / ntau)  + itau * itau # this performs best 
       #_coeff_phi[:, itau] = avg_rho * dtau * _g * itau * np.exp(-2. * np.pi * 1j * itau / ntau)  
       #_coeff_phi[:, itau] = (itau) ** 2

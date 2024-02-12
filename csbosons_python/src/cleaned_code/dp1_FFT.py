@@ -1,7 +1,5 @@
 import numpy as np
 import math
-import matplotlib
-#matplotlib.rcParams['text.usetex'] = True
 from scipy.fft import fft 
 from scipy.fft import ifft
 

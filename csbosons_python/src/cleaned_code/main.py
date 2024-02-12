@@ -2,8 +2,6 @@ import numpy as np
 import yaml
 import math
 import matplotlib
-#matplotlib.rcParams['text.usetex'] = True
-matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 import time
 from scipy.fft import fft 
@@ -20,20 +18,20 @@ import Operator
 
 ########### System ############### 
 ensemble = 'GRAND'  # Ensemble. either grand or canonical
-_mu = 1.5    # Chemical potential 
-_g = 2.00 # Interaction strength     # ideal gas if == 0 
+_mu = 1.0    # Chemical potential 
+_g = 0.10 # Interaction strength     # ideal gas if == 0 
 _beta = 1.00 # inverse temperature 
 _lambda = 6.0505834240  # hbar^2 / 2m for mass of He4
 dim = 1
 L = 1  # simulation box size 
-ntau = 64 # number of imaginary time points 
+ntau = 24     # number of imaginary time points 
 Vol = L**dim
 
 ######## Simulation, Discretization parameters ########### 
 Nx = 1  # assumes cubic/square cells (Nx = Ny = Nz) 
-dt = 0.0002      # Langevin timestep 
-numtsteps = 100000 # total number of Langevin steps 
-iofreq = 500 # print every ___ Langevin steps  
+dt = 0.01      # Langevin timestep 
+numtsteps = 10000 # total number of Langevin steps 
+iofreq = 200 # print every ___ Langevin steps  
 num_samples = math.floor(numtsteps/iofreq)
 _CLnoise = True  # Complex Langevin (with Noise) or mean-field theory (no noise) 
 _isOffDiagonal = True

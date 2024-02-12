@@ -2,8 +2,8 @@ import numpy as np
 import yaml
 import math
 import matplotlib
-#matplotlib.rcParams['text.usetex'] = True
-matplotlib.use('TkAgg')
+matplotlib.rcParams['text.usetex'] = True
+#matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 import time
 from scipy.fft import fft 

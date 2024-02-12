@@ -1,15 +1,9 @@
 import numpy as np
 import yaml
 import math
-import matplotlib
-#matplotlib.rcParams['text.usetex'] = True
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt 
 import time
 from scipy.fft import fft 
 from scipy.fft import ifft
-import matplotlib 
-import matplotlib.pyplot as plt 
 from scipy.stats import sem
 from dp1_FFT import *
 # Import our custom classes 

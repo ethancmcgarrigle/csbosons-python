@@ -41,7 +41,7 @@ class Operator:
     self.avgSq = 0. + 1j*0.
 
 
-
+## particle number observable 
 class N_Operator(Operator):
   def __init__(self, name, N_samples, _calcSquared):
     super().__init__(name, N_samples) 
@@ -67,8 +67,8 @@ class N_Operator(Operator):
     N = 0. + 1j*0.
     for itau in range(0, int(ntau)):
       itaum1 = ( (int(itau) - 1) % int(ntau) + int(ntau)) % int(ntau) # for PBC 
-      rho += phistar[:, itau] * phi[:, itaum1]
-    N = integrate_r_intensive(rho/ntau) * Vol
+      rho += phistar[:, itau] * phi[:, itaum1] # particle number density from phi^* phi 
+    N = integrate_r_intensive(rho/ntau) * Vol  # integrate over space and * Vol to get number of particles 
     #self.samples[sample_indx] = N
     self.value = 0.
     self.value += N

@@ -48,11 +48,12 @@ class Bosefluid_Model:
     self.Volume = L**dim
     self.N_spatial = Nx**dim
     self.dV = self.Volume/(Nx**dim) 
-    # taugrid 
+    # Imaginary time discretization; fields obey PBC in imaginary time dimension 
     self.dtau = beta/ntau 
 
-    # d+1 dim fields: use 2D np arrays: (Nx **d) x Ntau 
+    # d+1 dim fields: use 2D np arrays: (Nx **d) x Ntau; i.e. the spatial dependence is "flattened"  
     # initialize CS fields at zero as default 
+
     # CS fields 
     self.phi = np.zeros((Nx**dim, ntau), dtype=np.complex_)
     self.phistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
@@ -64,6 +65,7 @@ class Bosefluid_Model:
     # Linear force coefficients 
     self.lincoef = np.zeros((Nx**dim, ntau), dtype=np.complex_)
     self.lincoef_phistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+    # Optional Linear force shifting coefficient
     self.Bn = np.zeros((Nx**dim, ntau), dtype=np.complex_)
     self.Bn_star = np.zeros((Nx**dim, ntau), dtype=np.complex_)
  
@@ -71,7 +73,8 @@ class Bosefluid_Model:
     self.initialize_CSfields('constant') 
     #self.initialize_CSfields('random') 
 
-    # Setup the k^2 grid, necessary for spectral evaluation of kinetic energy operator on CSfields  
+    # Setup the k^2 grid, necessary for spectral evaluation of kinetic energy operator on CSfields 
+    #   For single site model (Nx = 1), the reciprocol lattice "kgrid" is just the k = 0 point.  
     self.k2grid = None  
     self.setup_kgrid()
 
@@ -156,7 +159,6 @@ class Bosefluid_Model:
       self.lincoef[:,n] =  A_nk(n, self.ntau, self.beta, self.k2grid, self._lambda, self.ensemble, self.mu)
       self.lincoef_phistar[:,n] = np.conj(self.lincoef[:,n])
 
-
 #  def setup_operators(self, ops_list, N_samples):
 #    #self.operators_list = ops_list
 #    for op in ops_list:
@@ -170,38 +172,33 @@ class Bosefluid_Model:
     self.Bn.fill(0.) 
     self.Bn_star.fill(0.) 
   
-    avg_rho = np.ceil( self.mu/self.g )
+    avg_rho = np.ceil( self.mu/self.g ) # a parameter for the stabilizing shift B(n) 
     #avg_rho = 1.5 
     #dtau = _beta/ntau
     for itau in range(0, int(self.ntau)):
       # PBC 
       itaum1 = ( (int(itau) - 1) % int(self.ntau) + int(self.ntau)) % int(self.ntau)
-      # Build force vector
-      # nonlinear forces  
+      # Nonlinear forces 
+      # dSdphistar_j = g * phi^*_j phi_j-1 phi_j-1 
+      # dSdphi_j = g * phi^*_j+1 phi_j phi_j 
       self.dSdphistar[:, itau] += self.g * self.dtau * self.phi[:, itaum1] * self.phi[:, itaum1] * self.phistar[:, itau]
       self.dSdphi[:, itaum1] += self.g * self.dtau * self.phistar[:, itau] * self.phi[:, itaum1] * self.phistar[:, itau]
       if(self.isShifting):
-        self.Bn[:, itau] += avg_rho * self.dtau * self.g * np.exp(-2. * np.pi * 1j * itau / self.ntau) # this performs best 
+        self.Bn[:, itau] += avg_rho * self.dtau * self.g * np.exp(-2. * np.pi * 1j * itau / self.ntau) 
+        # Other attempts: 
         #self.Bn[:, itau] = 0. 
-        self.Bn[:, itau] += itau         # this performs best 
+        #self.Bn[:, itau] += itau         # 
         #self.Bn[:, itau] += itau*itau 
         # 1. shift to ensure pos. definite net linear coefficient 
- #        if((self.Bn[:, itau] + self.lincoef[:,itau]).real < 0.):
- #          self.Bn[:, itau] -= 3.*(self.Bn[:, itau] + self.lincoef[:, itau]).real # reflect onto real axis  
+        if((self.Bn[:, itau] + self.lincoef[:,itau]).real < 0.):
+          self.Bn[:, itau] -= 2.*(self.Bn[:, itau] + self.lincoef[:, itau]).real # reflect onto real axis  
         #print( (self.Bn[:, itau] + self.lincoef[:,itau]).real >= 0.) 
   
         # 2. shift to ensure real linear coefficient 
- #        if(np.abs((self.Bn[:, itau] + self.lincoef[:,itau]).imag) > 0.):
- #          self.Bn[:, itau] -= 1j*(self.Bn[:, itau] + self.lincoef[:, itau]).imag
-        #print( np.abs((self.Bn[:, itau] + self.lincoef[:,itau]).imag) > 0.) 
+        if(np.abs((self.Bn[:, itau] + self.lincoef[:,itau]).imag) > 0.):
+          self.Bn[:, itau] -= 1j*(self.Bn[:, itau] + self.lincoef[:, itau]).imag
+        #print( np.abs((self.Bn[:, itau] + self.lincoef[:,itau]).imag) < 1E-10) # check that we've eliminated the imaginary part  
         self.Bn_star[:, itau] = np.conj(self.Bn[:, itau]) 
-    
-      if(self.ensemble == "CANONICAL"):
-        # include mu force in nonlinear
-        # identify _mu = i psi / \beta
-        _mu_eff = 1j * self.psi / self.beta
-        self.dSdphistar[:, itau] += -self.phi[:, itaum1] * _mu_eff * self.dtau 
-        self.dSdphi[:, itaum1] +=  -self.phistar[:, itau] * _mu_eff * self.dtau 
 
     if(self.isShifting): 
       # FFT CS fields and forces 

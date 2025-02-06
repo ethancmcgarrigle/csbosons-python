@@ -1,15 +1,9 @@
 import numpy as np
 import yaml
 import math
-import matplotlib
-#matplotlib.rcParams['text.usetex'] = True
-#matplotlib.use('TkAgg')
-#import matplotlib.pyplot as plt 
 import time
 from scipy.fft import fft 
 from scipy.fft import ifft
-import matplotlib 
-import matplotlib.pyplot as plt 
 from dp1_FFT import *
 from scipy.stats import sem
 from Operator import N_Operator
@@ -55,19 +49,19 @@ class Bosefluid_Model:
     # initialize CS fields at zero as default 
 
     # CS fields 
-    self.phi = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-    self.phistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+    self.phi = np.zeros((Nx**dim, ntau), dtype=np.complex128)
+    self.phistar = np.zeros((Nx**dim, ntau), dtype=np.complex128)
      
     # total forces for CS fields  
-    self.dSdphi = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-    self.dSdphistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+    self.dSdphi = np.zeros((Nx**dim, ntau), dtype=np.complex128)
+    self.dSdphistar = np.zeros((Nx**dim, ntau), dtype=np.complex128)
     
     # Linear force coefficients 
-    self.lincoef = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-    self.lincoef_phistar = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+    self.lincoef = np.zeros((Nx**dim, ntau), dtype=np.complex128)
+    self.lincoef_phistar = np.zeros((Nx**dim, ntau), dtype=np.complex128)
     # Optional Linear force shifting coefficient
-    self.Bn = np.zeros((Nx**dim, ntau), dtype=np.complex_)
-    self.Bn_star = np.zeros((Nx**dim, ntau), dtype=np.complex_)
+    self.Bn = np.zeros((Nx**dim, ntau), dtype=np.complex128)
+    self.Bn_star = np.zeros((Nx**dim, ntau), dtype=np.complex128)
  
     # Initialize CS fields
     self.initialize_CSfields('constant') 
@@ -91,7 +85,7 @@ class Bosefluid_Model:
 
 
   def initialize_CSfields(self, IC_type):
-    IC = np.zeros((self.N_spatial, self.ntau), dtype=np.complex_)
+    IC = np.zeros((self.N_spatial, self.ntau), dtype=np.complex128)
     if(IC_type == 'constant'):
       N_input = 0.
       if(self.mu < 0 or self.g == 0):
@@ -220,7 +214,7 @@ class Bosefluid_Model:
 ## Helper function for calculating Linear force coefficients 
 def A_nk(n, _ntau, _beta, k2_grid, _lambda, _ensemble, _mu):
         # Returns a d-dimensional field, evaluated at timeslice "n" 
-        A = np.zeros(len(k2_grid), dtype=np.complex_) 
+        A = np.zeros(len(k2_grid), dtype=np.complex128) 
         dtau = _beta/_ntau
         A += (- dtau * _lambda * k2_grid) # hbar^2/2m k^2, kinetic energy 
         if(_ensemble == "GRAND"):

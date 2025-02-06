@@ -2,14 +2,15 @@ import numpy as np
 import yaml
 import math
 import matplotlib
-#matplotlib.rcParams['text.usetex'] = True ## Use this on mac osx?
-matplotlib.use('TkAgg') # use this on linux 
 import matplotlib.pyplot as plt 
+import platform
+if 'Linux' in platform.platform():
+  matplotlib.use('TkAgg')
+else:
+  matplotlib.rcParams['text.usetex'] = True
 import time
 from scipy.fft import fft 
 from scipy.fft import ifft
-import matplotlib 
-import matplotlib.pyplot as plt 
 from scipy.stats import sem
 # Import our custom classes 
 from dp1_FFT import *
@@ -48,14 +49,14 @@ class CL_Driver:
     # d+1 dim fields: use 2D np arrays: (Nx **d) x Ntau 
     # initialize CS fields at zero as default 
     # Noise, nonlinearcoefs, linear_tstep_coefs initialize 
-    self.noise = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex_)
-    self.noisestar = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex_)
-    self.lin_tstep_coef = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex_)
-    self.linstar_tstep_coef= np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex_)
-    self.nonlincoef = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex_)
-    self.nonlincoef_phistar = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex_)
-    self.noisescl = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex_)
-    self.noisescl_phistar = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex_)
+    self.noise = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex128)
+    self.noisestar = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex128)
+    self.lin_tstep_coef = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex128)
+    self.linstar_tstep_coef= np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex128)
+    self.nonlincoef = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex128)
+    self.nonlincoef_phistar = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex128)
+    self.noisescl = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex128)
+    self.noisescl_phistar = np.zeros((self.Nx**self.dim, self.ntau), dtype=np.complex128)
 
     # Print the simulation setup 
     self.print_model_startup()

@@ -24,8 +24,8 @@ class Timesteppers:
       N_spatial = len(phi[:, 0])
   
       # noise
-      noise = np.zeros((N_spatial, ntau), dtype=np.complex_)
-      noisestar = np.zeros((N_spatial, ntau), dtype=np.complex_)
+      noise = np.zeros((N_spatial, ntau), dtype=np.complex128)
+      noisestar = np.zeros((N_spatial, ntau), dtype=np.complex128)
       noise.fill(0.) 
       noisestar.fill(0.) 
       mobility = ntau
@@ -69,8 +69,8 @@ class Timesteppers:
     phistar += (fft_dp1(_dSdphi) * _nonlincoef_phistar)
   
     # noise
-    _noise = np.zeros((N_spatial, ntau), dtype=np.complex_)
-    _noisestar = np.zeros((N_spatial, ntau), dtype=np.complex_)
+    _noise = np.zeros((N_spatial, ntau), dtype=np.complex128)
+    _noisestar = np.zeros((N_spatial, ntau), dtype=np.complex128)
     _noise.fill(0.) 
     _noisestar.fill(0.) 
   

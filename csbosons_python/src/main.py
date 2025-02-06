@@ -1,8 +1,6 @@
 import numpy as np
 import yaml
 import math
-import matplotlib
-import matplotlib.pyplot as plt 
 import time
 from scipy.fft import fft 
 from scipy.fft import ifft
@@ -44,19 +42,19 @@ _beta = 1.00 # inverse temperature
 _lambda = 6.0505834240  # hbar^2 / 2m for mass of He4; not necessary for single-site lattice model 
 dim = 1  # testing in 1D
 L = 1  # simulation box size. L = 1 with Nx = 1 (1 grid point) corresponds to a single-site Bose-Hubbard (lattice) model 
-ntau = 40     # number of imaginary time points  
+ntau = 32     # number of imaginary time points  
 Vol = L**dim
 
 
 ######## Simulation, Discretization parameters ########### 
 Nx = 1  # number of grid points; assumes cubic/square cells (Nx = Ny = Nz) 
-dt = 0.001  # Langevin timestep 
-numtsteps = 500000 # total number of Langevin steps 
+dt = 0.01  # Langevin timestep 
+numtsteps = 100000 # total number of Langevin steps 
 iofreq = 100   # print every ___ Langevin steps  
 num_samples = math.floor(numtsteps/iofreq)
 _CLnoise = True  # Complex Langevin (with Noise or true) or mean-field theory (no noise / false) 
 _ETD = True   # Exponential time differencing if true; Euler Maruyama if false 
-_isShifting = True # Boolean for shifting linear coefficients for stability testing 
+_isShifting = False #Boolean for shifting linear coefficients for stability testing 
 
 assert L == 1 and Nx == 1, 'This code is meant to test the single site model, corresponding to L = 1 and Nx = 1'
 #_do_implicit = True   # Fully implicit iteraton currently doesn't work in this formulation of the code 

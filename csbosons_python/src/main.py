@@ -79,5 +79,3 @@ _simulation_driver.run_simulation(_isPlotting)
 print('Code exited successfully')
 
 
-
-

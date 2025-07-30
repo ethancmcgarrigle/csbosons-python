@@ -16,13 +16,6 @@ import matplotlib.pyplot as plt
 
 # This will be used to test numerical projection methods 
 
-
-# 1. Confirm GCE implementation -- SUCCESS! Need to get k2_grid correct still 
-
-# 2. Confirm CE implementation -- Success! Robust stability on IG, dubious on (interacting) bosefluid  
-
-# 3. confirm projected implementation -- In progress  
-
 # Helper functions
 
 

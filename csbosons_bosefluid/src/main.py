@@ -49,7 +49,7 @@ Vol = L**dim
 ######## Simulation, Discretization parameters ########### 
 Nx = 1  # number of grid points; assumes cubic/square cells (Nx = Ny = Nz) 
 dt = 0.01  # Langevin timestep 
-numtsteps = 100000 # total number of Langevin steps 
+numtsteps = 10000 # total number of Langevin steps 
 iofreq = 100   # print every ___ Langevin steps  
 num_samples = math.floor(numtsteps/iofreq)
 _CLnoise = True  # Complex Langevin (with Noise or true) or mean-field theory (no noise / false) 
